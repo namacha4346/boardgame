@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>爆弾タイマー</title>
+<style>
+  :root {
+    --bg: #1b1d24;
+    --panel: #262933;
+    --text: #f2f2f2;
+    --muted: #9aa0ad;
+    --accent: #ff5a36;
+    --accent-2: #ffc23d;
+    --btn: #353946;
+    --btn-hover: #434858;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+  h1 { font-size: 1.4rem; margin: 8px 0 4px; letter-spacing: .05em; }
+
+  .stage {
+    position: relative;
+    width: min(420px, 90vw);
+    aspect-ratio: 1 / 1;
+    margin: 8px 0;
+  }
+  .stage svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+  #bomb.warning { animation: wobble .25s infinite; transform-origin: 200px 260px; }
+  @keyframes wobble {
+    0%,100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(-2deg) scale(1.02); }
+    75% { transform: rotate(2deg) scale(1.02); }
+  }
+  #bombBody.pulse { animation: redPulse .5s infinite alternate; }
+  @keyframes redPulse { from { opacity: 0; } to { opacity: .35; } }
+
+  #spark .sparkInner { transform-box: fill-box; transform-origin: center; animation: sparkle .12s infinite alternate; }
+  @keyframes sparkle { from { transform: scale(.8) rotate(0deg); } to { transform: scale(1.25) rotate(25deg); } }
+
+  .time {
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(3rem, 15vw, 5.5rem);
+    font-weight: 800;
+    letter-spacing: .04em;
+    line-height: 1;
+    margin: 4px 0 16px;
+    transition: color .2s;
+  }
+  .time.danger { color: var(--accent); }
+
+  .controls, .presets, .custom { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
+  button {
+    font: inherit;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    background: var(--btn);
+    color: var(--text);
+    cursor: pointer;
+    transition: background .15s, transform .05s;
+  }
+  button:hover { background: var(--btn-hover); }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); font-weight: 700; min-width: 120px; }
+  button.primary:hover { background: #ff7555; }
+  .presets button { padding: 6px 14px; font-size: .9rem; }
+
+  .custom label { color: var(--muted); font-size: .9rem; display: flex; align-items: center; gap: 4px; }
+  .custom input {
+    width: 64px; padding: 6px 8px; border-radius: 8px; border: 1px solid #444a58;
+    background: var(--panel); color: var(--text); font: inherit; text-align: right;
+  }
+  .opts { color: var(--muted); font-size: .9rem; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+
+  /* 爆発 */
+  #flash {
+    position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 10;
+  }
+  #flash.on { animation: flash 1s ease-out forwards; }
+  @keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  body.shake { animation: shake .6s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes shake {
+    10%, 90% { transform: translate(-4px, 2px); }
+    20%, 80% { transform: translate(8px, -6px); }
+    30%, 50%, 70% { transform: translate(-14px, 8px); }
+    40%, 60% { transform: translate(14px, -8px); }
+  }
+
+  #boom { display: none; }
+  #boom.on { display: inline; }
+  #boom .burst { transform-origin: 200px 230px; animation: burst .6s cubic-bezier(.2,1.6,.4,1) both; }
+  #boom .burst2 { transform-origin: 200px 230px; animation: burst .6s .08s cubic-bezier(.2,1.6,.4,1) both; }
+  #boom .text { transform-origin: 200px 240px; animation: burst .5s .15s cubic-bezier(.2,1.8,.4,1) both; }
+  @keyframes burst { from { transform: scale(0) rotate(-20deg); } to { transform: scale(1) rotate(0deg); } }
+
+  .particle {
+    position: fixed; width: 10px; height: 10px; border-radius: 50%; pointer-events: none; z-index: 5;
+    will-change: transform, opacity;
+  }
+</style>
+</head>
+<body>
+  <div id="flash"></div>
+  <h1>💣 爆弾タイマー</h1>
+
+  <div class="stage">
+    <svg viewBox="0 0 400 400" aria-label="爆弾">
+      <defs>
+        <radialGradient id="shine" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#6b7080"/>
+          <stop offset="45%" stop-color="#2b2e38"/>
+          <stop offset="100%" stop-color="#101116"/>
+        </radialGradient>
+        <radialGradient id="sparkGrad">
+          <stop offset="0%" stop-color="#fff"/>
+          <stop offset="40%" stop-color="#ffe066"/>
+          <stop offset="100%" stop-color="#ff5a36" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <g id="bomb">
+        <!-- 導火線 (燃えた部分: 背景色の薄い線) -->
+        <path id="fuseBurnt" d="M258 118 C 290 70, 320 110, 330 70 S 360 30, 372 40"
+              fill="none" stroke="#3a3d48" stroke-width="7" stroke-linecap="round" stroke-dasharray="3 8"/>
+        <!-- 導火線 (残り) -->
+        <path id="fuse" d="M258 118 C 290 70, 320 110, 330 70 S 360 30, 372 40"
+              fill="none" stroke="#c9a46a" stroke-width="7" stroke-linecap="round"/>
+        <!-- 口金 -->
+        <rect x="222" y="104" width="52" height="40" rx="6" fill="#4a4e5c" transform="rotate(40 248 124)"/>
+        <!-- 本体 -->
+        <circle cx="190" cy="250" r="120" fill="url(#shine)"/>
+        <circle id="bombBody" cx="190" cy="250" r="120" fill="#ff2a1a" opacity="0"/>
+        <ellipse cx="145" cy="200" rx="30" ry="18" fill="#fff" opacity=".18" transform="rotate(-35 145 200)"/>
+        <!-- 火花 -->
+        <g id="spark" transform="translate(372 40)">
+          <g class="sparkInner">
+            <circle r="22" fill="url(#sparkGrad)"/>
+            <path d="M0 -20 L4 -4 L20 0 L4 4 L0 20 L-4 4 L-20 0 L-4 -4 Z" fill="#fff6c2"/>
+          </g>
+        </g>
+      </g>
+
+      <g id="boom">
+        <polygon class="burst" fill="#ff5a36"
+          points="200,40 228,150 330,90 270,190 390,220 270,260 340,360 230,300 200,400 170,300 60,360 130,260 10,220 130,190 70,90 172,150"/>
+        <polygon class="burst2" fill="#ffc23d"
+          points="200,95 220,170 290,135 250,200 330,225 250,250 295,315 215,280 200,345 185,280 105,315 150,250 70,225 150,200 110,135 180,170"/>
+        <text class="text" x="200" y="258" text-anchor="middle" font-size="72" font-weight="900"
+              fill="#fff" stroke="#b3200a" stroke-width="6" paint-order="stroke"
+              font-family="system-ui, sans-serif">BOOM!</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="time" id="time">01:00</div>
+
+  <div class="controls">
+    <button class="primary" id="startBtn">スタート</button>
+    <button id="resetBtn">リセット</button>
+  </div>
+
+  <div class="presets" id="presets">
+    <button data-sec="10">10秒</button>
+    <button data-sec="30">30秒</button>
+    <button data-sec="60">1分</button>
+    <button data-sec="180">3分</button>
+    <button data-sec="300">5分</button>
+    <button data-sec="600">10分</button>
+  </div>
+
+  <div class="custom">
+    <label><input type="number" id="minIn" min="0" max="99" value="1">分</label>
+    <label><input type="number" id="secIn" min="0" max="59" value="0">秒</label>
+    <button id="setBtn">セット</button>
+  </div>
+
+  <div class="opts">
+    <label><input type="checkbox" id="soundChk" checked> 音を鳴らす</label>
+    <label><input type="checkbox" id="tickChk" checked> カチカチ音</label>
+  </div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const timeEl = $('time'), startBtn = $('startBtn'), resetBtn = $('resetBtn');
+  const fuse = $('fuse'), spark = $('spark'), bomb = $('bomb'), bombBody = $('bombBody'), boom = $('boom');
+  const minIn = $('minIn'), secIn = $('secIn');
+
+  const fuseLen = fuse.getTotalLength();
+  fuse.style.strokeDasharray = fuseLen;
+
+  let total = 60;          // 設定秒数
+  let remaining = 60;      // 残り秒数 (小数)
+  let endAt = 0;           // 終了時刻 (performance.now 基準)
+  let running = false;
+  let exploded = false;
+  let raf = 0;
+  let lastTickSec = null;
+
+  // ---------- 音 ----------
+  let ctx = null;
+  const audio = () => {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  };
+  function beep(freq, dur, vol = .15, type = 'square') {
+    if (!$('soundChk').checked) return;
+    const a = audio(), o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, a.currentTime + dur);
+    o.connect(g).connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  }
+  function explosionSound() {
+    if (!$('soundChk').checked) return;
+    const a = audio(), len = a.sampleRate * 2.5;
+    const buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const src = a.createBufferSource(); src.buffer = buf;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3000, a.currentTime);
+    lp.frequency.exponentialRampToValueAtTime(120, a.currentTime + 2);
+    const g = a.createGain(); g.gain.value = 1.2;
+    src.connect(lp).connect(g).connect(a.destination);
+    src.start();
+    // 低音のドーン
+    const o = a.createOscillator(), og = a.createGain();
+    o.frequency.setValueAtTime(120, a.currentTime);
+    o.frequency.exponentialRampToValueAtTime(30, a.currentTime + 1);
+    og.gain.setValueAtTime(.8, a.currentTime);
+    og.gain.exponentialRampToValueAtTime(.001, a.currentTime + 1.2);
+    o.connect(og).connect(a.destination); o.start(); o.stop(a.currentTime + 1.2);
+  }
+
+  // ---------- 表示 ----------
+  function fmt(s) {
+    const c = Math.ceil(s);
+    return String(Math.floor(c / 60)).padStart(2, '0') + ':' + String(c % 60).padStart(2, '0');
+  }
+  function render() {
+    timeEl.textContent = fmt(remaining);
+    const ratio = total > 0 ? Math.max(0, remaining / total) : 0;
+    // 導火線は爆弾側から残る。先端(終点)から燃えて短くなる
+    const visible = fuseLen * ratio;
+    fuse.style.strokeDashoffset = 0;
+    fuse.style.strokeDasharray = `${visible} ${fuseLen}`;
+    const p = fuse.getPointAtLength(visible);
+    spark.setAttribute('transform', `translate(${p.x} ${p.y})`);
+    spark.style.display = exploded ? 'none' : '';
+
+    const danger = remaining <= Math.min(10, total * .2) && remaining > 0 && running;
+    timeEl.classList.toggle('danger', danger);
+    bomb.classList.toggle('warning', danger);
+    bombBody.classList.toggle('pulse', danger);
+  }
+
+  // ---------- ループ ----------
+  function loop() {
+    remaining = Math.max(0, (endAt - performance.now()) / 1000);
+    const sec = Math.ceil(remaining);
+    if (sec !== lastTickSec && remaining > 0) {
+      lastTickSec = sec;
+      if ($('tickChk').checked) {
+        if (sec <= 5) beep(1320, .12, .2);
+        else if (sec <= 10) beep(990, .08, .15);
+        else beep(1800, .03, .08, 'triangle');
+      }
+    }
+    render();
+    if (remaining <= 0) { explode(); return; }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function start() {
+    if (exploded) reset();
+    if (remaining <= 0) return;
+    audio();
+    running = true;
+    endAt = performance.now() + remaining * 1000;
+    lastTickSec = null;
+    startBtn.textContent = '一時停止';
+    raf = requestAnimationFrame(loop);
+  }
+  function pause() {
+    running = false;
+    cancelAnimationFrame(raf);
+    startBtn.textContent = '再開';
+    render();
+  }
+  function reset() {
+    running = false; exploded = false;
+    cancelAnimationFrame(raf);
+    remaining = total;
+    bomb.style.display = ''; boom.classList.remove('on');
+    startBtn.textContent = 'スタート';
+    render();
+  }
+  function setTime(sec) {
+    total = Math.max(1, Math.min(99 * 60 + 59, Math.floor(sec)));
+    minIn.value = Math.floor(total / 60); secIn.value = total % 60;
+    reset();
+  }
+
+  function explode() {
+    running = false; exploded = true;
+    cancelAnimationFrame(raf);
+    remaining = 0; render();
+    bomb.style.display = 'none';
+    boom.classList.remove('on'); void boom.getBBox(); boom.classList.add('on');
+    startBtn.textContent = 'もう一度';
+    explosionSound();
+    const flash = $('flash');
+    flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
+    document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
+    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    particles();
+  }
+
+  function particles() {
+    const r = document.querySelector('.stage').getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height * .6;
+    const colors = ['#ff5a36', '#ffc23d', '#fff1a8', '#ff8c1a', '#666'];
+    for (let i = 0; i < 60; i++) {
+      const el = document.createElement('div');
+      el.className = 'particle';
+      const size = 6 + Math.random() * 14;
+      el.style.width = el.style.height = size + 'px';
+      el.style.left = cx + 'px'; el.style.top = cy + 'px';
+      el.style.background = colors[i % colors.length];
+      document.body.appendChild(el);
+      const ang = Math.random() * Math.PI * 2, dist = 120 + Math.random() * 300;
+      el.animate([
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${Math.cos(ang) * dist}px), calc(-50% + ${Math.sin(ang) * dist + 80}px)) scale(.3)`, opacity: 0 }
+      ], { duration: 900 + Math.random() * 700, easing: 'cubic-bezier(.1,.8,.3,1)' }).onfinish = () => el.remove();
+    }
+  }
+
+  // ---------- イベント ----------
+  startBtn.onclick = () => running ? pause() : start();
+  resetBtn.onclick = reset;
+  $('presets').onclick = e => { const s = e.target.dataset.sec; if (s) setTime(+s); };
+  $('setBtn').onclick = () => setTime((+minIn.value || 0) * 60 + (+secIn.value || 0));
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); startBtn.click(); }
+    if (e.key === 'r' || e.key === 'R') reset();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
