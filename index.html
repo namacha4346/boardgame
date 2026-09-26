@@ -237,14 +237,14 @@
     const lp = a.createBiquadFilter(); lp.type = 'lowpass';
     lp.frequency.setValueAtTime(3000, a.currentTime);
     lp.frequency.exponentialRampToValueAtTime(120, a.currentTime + 2);
-    const g = a.createGain(); g.gain.value = 1.2;
+    const g = a.createGain(); g.gain.value = .75;
     src.connect(lp).connect(g).connect(a.destination);
     src.start();
     // 低音のドーン
     const o = a.createOscillator(), og = a.createGain();
     o.frequency.setValueAtTime(120, a.currentTime);
     o.frequency.exponentialRampToValueAtTime(30, a.currentTime + 1);
-    og.gain.setValueAtTime(.8, a.currentTime);
+    og.gain.setValueAtTime(.5, a.currentTime);
     og.gain.exponentialRampToValueAtTime(.001, a.currentTime + 1.2);
     o.connect(og).connect(a.destination); o.start(); o.stop(a.currentTime + 1.2);
   }
