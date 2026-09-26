@@ -190,6 +190,7 @@
 
   <div class="opts">
     <label><input type="checkbox" id="soundChk" checked> 音を鳴らす</label>
+    <label><input type="checkbox" id="bgmChk" checked> BGM</label>
     <label><input type="checkbox" id="tickChk" checked> カチカチ音</label>
   </div>
 
@@ -248,6 +249,90 @@
     o.connect(og).connect(a.destination); o.start(); o.stop(a.currentTime + 1.2);
   }
 
+  // ---------- BGM (Web Audio で生成) ----------
+  // 16分音符単位のステップシーケンサー。残り時間が減るほどテンポが上がり、
+  // 終盤はパートが増えて焦りが増す。
+  const bgm = { timer: 0, step: 0, next: 0, out: null, noise: null };
+  // 4小節ループのベースのルート (A → A → B♭ → G#) で不穏な半音進行
+  const ROOTS = [45, 45, 46, 44];
+  const BASS = [0, 0, 12, 0, 0, 12, 0, 0, 0, 0, 12, 0, 0, 12, 0, 1];
+  const LEAD = [0, 3, 7, 3, 12, 7, 3, 7, 0, 3, 8, 3, 13, 8, 3, 8];
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  const bgmOn = () => $('soundChk').checked && $('bgmChk').checked;
+
+  function bgmTempo() {
+    const r = total > 0 ? Math.max(0, remaining / total) : 0;
+    const bpm = 112 + 60 * Math.pow(1 - r, 1.6);
+    return remaining <= 10 ? Math.max(bpm, 176) : bpm;
+  }
+  function tone(t, freq, dur, vol, type, cutoff) {
+    const a = ctx, o = a.createOscillator(), g = a.createGain(), f = a.createBiquadFilter();
+    o.type = type; o.frequency.value = freq;
+    f.type = 'lowpass'; f.frequency.value = cutoff;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(f).connect(g).connect(bgm.out);
+    o.start(t); o.stop(t + dur + .02);
+  }
+  function noiseHit(t, dur, vol, type, freq) {
+    const a = ctx, src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = bgm.noise;
+    f.type = type; f.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    src.connect(f).connect(g).connect(bgm.out);
+    src.start(t); src.stop(t + dur + .02);
+  }
+  function kick(t) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + .12);
+    g.gain.setValueAtTime(.9, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + .18);
+    o.connect(g).connect(bgm.out); o.start(t); o.stop(t + .2);
+  }
+  function playStep(step, t, stepDur) {
+    const s = step % 16, bar = Math.floor(step / 16) % 4, root = ROOTS[bar];
+    const r = total > 0 ? remaining / total : 0;
+    const hurry = remaining <= 10 || r < .25;   // 終盤
+    // ドラム
+    if (s % 8 === 0 || (hurry && s % 4 === 0)) kick(t);
+    if (s === 4 || s === 12) noiseHit(t, .12, .35, 'bandpass', 1800);
+    if (hurry || s % 2 === 0) noiseHit(t, .04, s % 4 === 2 ? .18 : .1, 'highpass', 7000);
+    // ベース (8分)
+    if (s % 2 === 0 || s === 15) tone(t, mtof(root + BASS[s]), stepDur * 1.6, .28, 'sawtooth', 700);
+    // リード (16分アルペジオ) は半分を過ぎたら登場
+    if (r < .5 || remaining <= 10) tone(t, mtof(root + 24 + LEAD[s]), stepDur * .9, .07, 'square', 2500);
+    // 最後はアラーム的な高音
+    if (remaining <= 10 && s % 4 === 0) tone(t, mtof(root + 36 + (s % 8 ? 1 : 0)), stepDur * 1.5, .05, 'square', 5000);
+  }
+  function bgmSchedule() {
+    const spb = 60 / bgmTempo() / 4;  // 16分音符の長さ
+    while (bgm.next < ctx.currentTime + .12) {
+      if (bgmOn()) playStep(bgm.step, bgm.next, spb);
+      bgm.next += spb;
+      bgm.step++;
+    }
+  }
+  function bgmStart() {
+    const a = audio();
+    if (!bgm.out) {
+      bgm.out = a.createGain(); bgm.out.gain.value = .35; bgm.out.connect(a.destination);
+      const len = a.sampleRate * .5;
+      bgm.noise = a.createBuffer(1, len, a.sampleRate);
+      const d = bgm.noise.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    clearInterval(bgm.timer);
+    bgm.next = a.currentTime + .05;
+    bgm.timer = setInterval(bgmSchedule, 25);
+    bgmSchedule();
+  }
+  function bgmStop(resetPos) {
+    clearInterval(bgm.timer); bgm.timer = 0;
+    if (resetPos) bgm.step = 0;
+  }
+
   // ---------- 表示 ----------
   function fmt(s) {
     const c = Math.ceil(s);
@@ -295,17 +380,20 @@
     endAt = performance.now() + remaining * 1000;
     lastTickSec = null;
     startBtn.textContent = '一時停止';
+    bgmStart();
     raf = requestAnimationFrame(loop);
   }
   function pause() {
     running = false;
     cancelAnimationFrame(raf);
+    bgmStop(false);
     startBtn.textContent = '再開';
     render();
   }
   function reset() {
     running = false; exploded = false;
     cancelAnimationFrame(raf);
+    bgmStop(true);
     remaining = total;
     bomb.style.display = ''; boom.classList.remove('on');
     startBtn.textContent = 'スタート';
@@ -320,6 +408,7 @@
   function explode() {
     running = false; exploded = true;
     cancelAnimationFrame(raf);
+    bgmStop(true);
     remaining = 0; render();
     bomb.style.display = 'none';
     boom.classList.remove('on'); void boom.getBBox(); boom.classList.add('on');
