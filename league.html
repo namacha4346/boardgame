@@ -1,0 +1,588 @@
+<title>盤士リーグ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: 盤面のような罫線グリッド。上に大会の看板、タブで「順位・対戦・決勝・参加者・設定」を切り替える */
+:root {
+  --bg: #eef0ec;
+  --surface: #fbfcf9;
+  --ink: #1d2420;
+  --muted: #5f6a63;
+  --line: #cfd6cf;
+  --accent: #2f6b4f;      /* 盤の深緑 */
+  --accent-ink: #ffffff;
+  --gold: #b07a1a;        /* 駒・トロフィー */
+  --win: #2f6b4f;
+  --lose: #a2483a;
+  --draw: #6b6f84;
+  --zone: #e2ece4;        /* 進出圏の背景 */
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131815; --surface: #1b211d; --ink: #e6ebe6; --muted: #9aa69e; --line: #2f3832;
+    --accent: #6fbf95; --accent-ink: #0f1712; --gold: #e0b052; --win: #6fbf95; --lose: #e08a7c;
+    --draw: #a5a9c2; --zone: #1f2d25; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131815; --surface: #1b211d; --ink: #e6ebe6; --muted: #9aa69e; --line: #2f3832;
+  --accent: #6fbf95; --accent-ink: #0f1712; --gold: #e0b052; --win: #6fbf95; --lose: #e08a7c;
+  --draw: #a5a9c2; --zone: #1f2d25; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.board { display: grid; gap: 10px; padding-block: 8px 4px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; font-family: var(--font-data); }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 46px); line-height: 1.15; letter-spacing: .02em; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; background: var(--surface); }
+.chip b { font-weight: 700; }
+.chip.live { border-color: var(--accent); color: var(--accent); }
+
+nav.tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--ink); overflow-x: auto; }
+nav.tabs button {
+  border: 0; background: none; padding: 8px 14px; font-weight: 700; cursor: pointer; color: var(--muted);
+  border-radius: 6px 6px 0 0; white-space: nowrap;
+}
+nav.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+
+.banner { padding: 10px 14px; border: 1px dashed var(--gold); border-radius: 8px; color: var(--ink); background: var(--surface); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.banner strong { color: var(--gold); }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; min-width: 0; }
+.panel h2 { font-family: var(--font-display); font-weight: 400; font-size: 20px; display: flex; align-items: baseline; gap: 10px; }
+.panel h2 small { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 500; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 6px 6px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+td.n, th.n { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+td.pts { font-weight: 600; }
+tr.zone td { background: var(--zone); }
+tr.zone td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.rank { font-family: var(--font-data); color: var(--muted); width: 1.8em; }
+.pname { font-weight: 700; }
+.bga { font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.legend { font-size: 12px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; background: var(--zone); border-left: 3px solid var(--accent); margin-right: 6px; vertical-align: -1px; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 5px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.round { display: grid; gap: 6px; }
+.round h3 { font-size: 12px; color: var(--muted); letter-spacing: .1em; font-weight: 500; }
+.match { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.match .side { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match .side.r { text-align: right; }
+.side.won { color: var(--win); font-weight: 700; }
+.side.won::after { content: " ●"; font-size: 10px; }
+.side.r.won::after { content: ""; }
+.side.r.won::before { content: "● "; font-size: 10px; }
+.side.lost { color: var(--muted); }
+.vs { font-family: var(--font-data); font-size: 12px; color: var(--muted); text-align: center; min-width: 4.5em; }
+.vs .score { display: block; color: var(--ink); font-weight: 600; }
+.vs .draw { color: var(--draw); font-weight: 600; }
+.match-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--muted); align-items: center; }
+.match-foot a { color: var(--accent); }
+.editor { grid-column: 1 / -1; display: grid; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.editor .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.btn.danger { color: var(--lose); }
+.btn.armed { background: var(--lose); color: var(--surface); border-color: var(--lose); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.pick { border: 1px solid var(--line); background: var(--surface); padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+.pick[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+input[type=text], input[type=url], input[type=number], input[type=date], select {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 5px 8px; min-width: 0;
+}
+input.grow { flex: 1 1 180px; }
+
+/* 決勝トーナメント */
+.bracket { display: flex; gap: 22px; overflow-x: auto; padding-bottom: 8px; }
+.bcol { display: flex; flex-direction: column; justify-content: space-around; gap: 12px; min-width: 190px; }
+.bcol h3 { font-size: 12px; color: var(--muted); letter-spacing: .1em; font-weight: 500; text-align: center; }
+.bm { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.bm button { display: flex; justify-content: space-between; gap: 6px; width: 100%; border: 0; background: none; padding: 6px 10px; text-align: left; cursor: pointer; }
+.bm button + button { border-top: 1px solid var(--line); }
+.bm button:disabled { cursor: default; }
+.bm button.won { background: var(--zone); font-weight: 700; color: var(--win); }
+.bm .seed { font-family: var(--font-data); font-size: 11px; color: var(--muted); }
+.bm .tbd { color: var(--muted); font-style: normal; }
+.champ { text-align: center; display: grid; gap: 4px; align-content: center; min-width: 160px; }
+.champ .cup { font-family: var(--font-display); font-size: 13px; color: var(--gold); letter-spacing: .1em; }
+.champ .who { font-family: var(--font-display); font-size: 22px; }
+
+.empty { text-align: center; padding: 36px 16px; display: grid; gap: 10px; justify-items: center; color: var(--muted); }
+.empty h2 { color: var(--ink); font-family: var(--font-display); font-weight: 400; font-size: 22px; }
+.empty ol { text-align: left; margin: 0; padding-left: 1.4em; max-width: 34em; }
+
+.form { display: grid; gap: 12px; }
+.field { display: grid; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.hint { font-size: 12px; color: var(--muted); }
+
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; z-index: 20; max-width: calc(100vw - 32px); }
+@media (prefers-reduced-motion: no-preference) { .bm button, .pick, .btn { transition: background-color .15s, border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="board">
+    <div class="eyebrow">Board Game Arena League</div>
+    <h1 id="title">盤士リーグ</h1>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div id="sampleBanner" class="banner" hidden>
+    <span><strong>サンプル表示中</strong>　架空の16人で画面の動きを見せています。ここでの操作は保存されません。</span>
+    <button class="btn small" id="exitSample">サンプルを閉じる</button>
+  </div>
+
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="standings">順位表</button>
+    <button role="tab" data-tab="matches">対戦表</button>
+    <button role="tab" data-tab="bracket">決勝トーナメント</button>
+    <button role="tab" data-tab="players">参加者</button>
+    <button role="tab" data-tab="setup" id="setupTab" hidden>運営設定</button>
+  </nav>
+
+  <main id="view"></main>
+</div>
+<div id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+  const GROUP_NAMES = "ABCDEFGH".split("");
+  const DEFAULT_CFG = { name: "盤士リーグ", game: "", groups: 4, advance: 2, ptsWin: 3, ptsDraw: 1, ptsLoss: 0, deadline: "" };
+  const TABS = ["standings", "matches", "bracket", "players", "setup"];
+
+  const S = {
+    db: null, user: null, isAdmin: false, canWrite: true, me: null, sample: false, loaded: false,
+    cfg: { ...DEFAULT_CFG }, players: new Map(), matches: new Map(), ko: new Map(), names: {},
+    tab: "standings", group: "all", openMatch: null,
+  };
+  let real = null; // 本番データの退避（サンプル表示中）
+
+  const $ = (s) => document.querySelector(s);
+  const h = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "class") el.className = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids.flat()) if (k != null && k !== false) el.append(k instanceof Node ? k : String(k));
+    return el;
+  };
+  const toast = (msg) => {
+    const t = $("#toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2600);
+  };
+  const errMsg = (e) => e && e.code === "not_granted" ? "書き込む権限がありません。運営に編集権限をもらってください。"
+    : e && e.code === "unavailable" ? "通信できませんでした。少し待ってからもう一度試してください。"
+    : "保存できませんでした（" + ((e && (e.message || e.code)) || "不明なエラー") + "）";
+  const safeBgaUrl = (u) => /^https:\/\/([a-z0-9-]+\.)?boardgamearena\.com\//i.test(u || "") ? u : null;
+  // 二度押しで実行する確認ボタン（confirm() はビューアで使えないため）
+  const armed = (label, onConfirm, cls = "btn danger") => {
+    const b = h("button", { class: cls, type: "button" }, label);
+    b.addEventListener("click", () => {
+      if (b.dataset.armed) { clearTimeout(b._t); onConfirm(); return; }
+      b.dataset.armed = "1"; b.classList.add("armed"); b.textContent = "もう一度押すと実行";
+      b._t = setTimeout(() => { delete b.dataset.armed; b.classList.remove("armed"); b.textContent = label; }, 4000);
+    });
+    return b;
+  };
+
+  // ---------- 書き込み（サンプル中はメモリのみ） ----------
+  async function write(path, data, mode = "set") {
+    if (S.sample) {
+      const [col, id] = path.split("/"); const m = { config: null, players: S.players, matches: S.matches, ko: S.ko }[col];
+      if (col === "config") S.cfg = { ...S.cfg, ...data };
+      else if (mode === "delete") m.delete(id);
+      else m.set(id, mode === "update" ? { ...(m.get(id) || {}), ...data } : data);
+      render(); return true;
+    }
+    if (!S.db) { toast("サインインすると保存できます。"); return false; }
+    try {
+      const ref = S.db.doc(path);
+      if (mode === "delete") await ref.delete(); else if (mode === "update") await ref.update(data); else await ref.set(data);
+      return true;
+    } catch (e) { toast(errMsg(e)); return false; }
+  }
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  // ---------- 計算 ----------
+  const groupsInUse = () => GROUP_NAMES.slice(0, Math.max(1, Math.min(8, +S.cfg.groups || 1)));
+  const pName = (id) => (S.players.get(id) || {}).name || "（削除された参加者）";
+  const playersIn = (g) => [...S.players.entries()].filter(([, p]) => p.group === g).map(([id, p]) => ({ id, ...p }))
+    .sort((a, b) => a.name.localeCompare(b.name, "ja"));
+
+  function standings(g) {
+    const rows = new Map(playersIn(g).map((p) => [p.id, { ...p, P: 0, W: 0, D: 0, L: 0, pts: 0 }]));
+    const ms = [...S.matches.values()].filter((m) => m.group === g && m.result);
+    for (const m of ms) {
+      const a = rows.get(m.a), b = rows.get(m.b); if (!a || !b) continue;
+      a.P++; b.P++;
+      if (m.result === "draw") { a.D++; b.D++; }
+      else if (m.result === "a") { a.W++; b.L++; } else { b.W++; a.L++; }
+    }
+    for (const r of rows.values()) r.pts = r.W * S.cfg.ptsWin + r.D * S.cfg.ptsDraw + r.L * S.cfg.ptsLoss;
+    const h2h = (x, y) => {
+      const m = ms.find((m) => (m.a === x.id && m.b === y.id) || (m.a === y.id && m.b === x.id));
+      if (!m || m.result === "draw") return 0;
+      const winner = m.result === "a" ? m.a : m.b; return winner === x.id ? -1 : 1;
+    };
+    return [...rows.values()].sort((x, y) => y.pts - x.pts || y.W - x.W || h2h(x, y) || x.name.localeCompare(y.name, "ja"));
+  }
+
+  function roundRobin(ids) {
+    const list = [...ids]; if (list.length % 2) list.push(null);
+    const n = list.length, out = [];
+    for (let r = 0; r < n - 1; r++) {
+      for (let i = 0; i < n / 2; i++) {
+        const a = list[i], b = list[n - 1 - i];
+        if (a && b) out.push({ round: r + 1, a: r % 2 ? b : a, b: r % 2 ? a : b });
+      }
+      list.splice(1, 0, list.pop());
+    }
+    return out;
+  }
+
+  // 決勝の組み合わせ：順位順にシードを並べ、1回戦の同グループ対決を隣の試合と入れ替えて避ける
+  function buildBracketSeeds() {
+    const K = Math.max(1, +S.cfg.advance || 1); const seeds = [];
+    const tables = Object.fromEntries(groupsInUse().map((g) => [g, standings(g)]));
+    for (let r = 0; r < K; r++) {
+      const gs = r % 2 ? [...groupsInUse()].reverse() : groupsInUse();
+      for (const g of gs) { const row = tables[g][r]; if (row) seeds.push({ id: row.id, g, rank: r + 1 }); }
+    }
+    let size = 2; while (size < seeds.length) size *= 2;
+    let order = [1, 2];
+    while (order.length < size) { const n = order.length * 2 + 1; order = order.flatMap((s) => [s, n - s]); }
+    const slots = order.map((s) => seeds[s - 1] || null);
+    const pairs = []; for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i], slots[i + 1]]);
+    for (let i = 0; i < pairs.length; i++) {
+      const [x, y] = pairs[i]; if (!x || !y || x.g !== y.g) continue;
+      const j = i % 2 ? i - 1 : i + 1; const other = pairs[j]; if (!other || !other[1]) continue;
+      if (other[1].g !== x.g && other[0] && other[0].g !== y.g) { pairs[i][1] = other[1]; pairs[j][1] = y; }
+    }
+    return pairs.map(([a, b]) => ({ a: a && a.id, b: b && b.id, aSeed: a && `${a.g}${a.rank}`, bSeed: b && `${b.g}${b.rank}` }));
+  }
+
+  function bracketRounds() {
+    const first = [...S.ko.entries()].filter(([k]) => /^r0m\d+$/.test(k)).sort((x, y) => +x[0].slice(3) - +y[0].slice(3)).map(([, v]) => v);
+    if (!first.length) return [];
+    while (first.length & (first.length - 1)) first.push({}); // 書き込み途中でも2の累乗にそろえる
+    const rounds = []; let prev = first.map((m, i) => ({ key: `r0m${i}`, a: m.a || null, b: m.b || null, aSeed: m.aSeed, bSeed: m.bSeed, w: (S.ko.get(`r0m${i}`) || {}).winner }));
+    let r = 0;
+    for (;;) {
+      prev.forEach((m) => { m.winner = (m.a && !m.b) ? m.a : (!m.a && m.b) ? m.b : (m.w && (m.w === m.a || m.w === m.b)) ? m.w : null; m.bye = !(m.a && m.b); });
+      rounds.push(prev); if (prev.length === 1) break; r++;
+      const next = [];
+      for (let i = 0; i < prev.length; i += 2) {
+        const key = `r${r}m${i / 2}`;
+        next.push({ key, a: prev[i].winner, b: prev[i + 1].winner, w: (S.ko.get(key) || {}).winner, pendA: !prev[i].winner, pendB: !prev[i + 1].winner });
+      }
+      prev = next;
+    }
+    return rounds;
+  }
+  const roundLabel = (i, total) => total - i === 1 ? "決勝" : total - i === 2 ? "準決勝" : total - i === 3 ? "準々決勝" : `${i + 1}回戦`;
+
+  // ---------- 描画 ----------
+  function render() {
+    $("#title").textContent = S.cfg.name || DEFAULT_CFG.name;
+    const total = S.matches.size, done = [...S.matches.values()].filter((m) => m.result).length;
+    const meta = $("#meta"); meta.replaceChildren(...[
+      h("span", { class: "chip" }, "ゲーム ", h("b", {}, S.cfg.game || "未定")),
+      h("span", { class: "chip" }, h("b", {}, S.players.size), " 人 · ", h("b", {}, groupsInUse().length), " グループ"),
+      h("span", { class: "chip" }, "各組上位 ", h("b", {}, S.cfg.advance), " 人が決勝へ"),
+      total ? h("span", { class: "chip live" }, "消化 ", h("b", {}, `${done} / ${total}`), " 試合") : null,
+      S.cfg.deadline ? h("span", { class: "chip" }, "リーグ締切 ", h("b", {}, S.cfg.deadline.replaceAll("-", "/"))) : null,
+    ].filter(Boolean));
+    $("#setupTab").hidden = !(S.isAdmin || S.sample);
+    if (S.tab === "setup" && $("#setupTab").hidden) S.tab = "standings";
+    for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", b.dataset.tab === S.tab);
+    $("#sampleBanner").hidden = !S.sample;
+    const v = $("#view");
+    if (!S.loaded) { v.replaceChildren(h("div", { class: "panel empty" }, "読み込み中…")); return; }
+    v.replaceChildren(({ standings: viewStandings, matches: viewMatches, bracket: viewBracket, players: viewPlayers, setup: viewSetup })[S.tab]());
+  }
+
+  function emptyState() {
+    return h("div", { class: "panel empty" },
+      h("h2", {}, "まだ参加者がいません"),
+      h("ol", {},
+        h("li", {}, "「運営設定」でリーグ名・ゲーム・グループ数・決勝進出人数を決める"),
+        h("li", {}, "参加者の名前と BGA のユーザー名を登録する"),
+        h("li", {}, "グループに振り分けて、総当たりの対戦表を作る"),
+        h("li", {}, "各自 BGA で対戦して、結果をここに入力する")),
+      S.isAdmin ? h("button", { class: "btn primary", onclick: () => go("setup") }, "運営設定をひらく") : h("p", {}, "運営が準備中です。"),
+      h("button", { class: "btn", onclick: enterSample }, "サンプルで画面を見てみる"));
+  }
+
+  function viewStandings() {
+    if (!S.players.size) return emptyState();
+    return h("div", { style: "display:grid;gap:12px" },
+      h("div", { class: "legend" }, h("span", {}, h("i"), `決勝進出圏（各組上位 ${S.cfg.advance} 人）`),
+        h("span", {}, `勝ち ${S.cfg.ptsWin} 点 · 引き分け ${S.cfg.ptsDraw} 点 · 負け ${S.cfg.ptsLoss} 点`),
+        h("span", {}, "同点は 勝ち数 → 直接対決 の順")),
+      h("div", { class: "groups" }, groupsInUse().map((g) => {
+        const rows = standings(g);
+        return h("section", { class: "panel" },
+          h("h2", {}, `グループ ${g}`, h("small", {}, `${rows.length} 人`)),
+          rows.length ? h("div", { class: "scroll" }, h("table", {},
+            h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "プレイヤー"), ...["試", "勝", "分", "負", "勝点"].map((t) => h("th", { class: "n" }, t)))),
+            h("tbody", {}, rows.map((r, i) => h("tr", { class: i < S.cfg.advance ? "zone" : null },
+              h("td", { class: "rank" }, i + 1),
+              h("td", {}, h("div", { class: "pname" }, r.name), r.bga ? h("div", { class: "bga" }, r.bga) : null),
+              h("td", { class: "n" }, r.P), h("td", { class: "n" }, r.W), h("td", { class: "n" }, r.D), h("td", { class: "n" }, r.L),
+              h("td", { class: "n pts" }, r.pts)))))) : h("p", { class: "hint" }, "このグループにはまだ誰もいません。"));
+      })));
+  }
+
+  function viewMatches() {
+    if (!S.players.size) return emptyState();
+    if (!S.matches.size) return h("div", { class: "panel empty" }, h("h2", {}, "対戦表はまだありません"),
+      h("p", {}, S.isAdmin || S.sample ? "運営設定の「対戦表を作る」で、グループごとの総当たりを作れます。" : "運営が対戦表を作ると、ここに並びます。"),
+      S.isAdmin || S.sample ? h("button", { class: "btn primary", onclick: () => go("setup") }, "運営設定をひらく") : null);
+    const gs = groupsInUse();
+    const tb = h("div", { class: "toolbar" }, h("div", { class: "seg" },
+      ["all", ...gs].map((g) => h("button", { "aria-pressed": S.group === g, onclick: () => { S.group = g; render(); } }, g === "all" ? "全組" : g))));
+    const shown = S.group === "all" ? gs : [S.group];
+    return h("div", { style: "display:grid;gap:14px" }, tb,
+      h("div", { class: "groups" }, shown.map((g) => {
+        const ms = [...S.matches.entries()].filter(([, m]) => m.group === g).sort((x, y) => x[1].round - y[1].round);
+        const byRound = new Map(); for (const e of ms) { if (!byRound.has(e[1].round)) byRound.set(e[1].round, []); byRound.get(e[1].round).push(e); }
+        return h("section", { class: "panel" }, h("h2", {}, `グループ ${g}`, h("small", {}, `${ms.filter(([, m]) => m.result).length} / ${ms.length} 試合`)),
+          [...byRound.entries()].map(([r, list]) => h("div", { class: "round" }, h("h3", {}, `第 ${r} 節`), list.map(([id, m]) => matchCard(id, m)))));
+      })));
+  }
+
+  function matchCard(id, m) {
+    const sideCls = (x) => !m.result || m.result === "draw" ? "" : m.result === x ? " won" : " lost";
+    const url = safeBgaUrl(m.url);
+    const open = S.openMatch === id;
+    const card = h("div", { class: "match" },
+      h("div", { class: "side" + sideCls("a") }, pName(m.a)),
+      h("div", { class: "vs" }, m.result === "draw" ? h("span", { class: "draw" }, "引分") : m.result ? h("span", { class: "score" }, m.score || "済") : "vs"),
+      h("div", { class: "side r" + sideCls("b") }, pName(m.b)),
+      h("div", { class: "match-foot" },
+        m.result && m.score && m.result === "draw" ? h("span", {}, m.score) : null,
+        url ? h("a", { href: url, target: "_blank", rel: "noopener" }, "BGA の卓をみる") : null,
+        m.by && S.names[m.by] ? h("span", {}, `入力: ${S.names[m.by]}`) : null,
+        S.canWrite || S.sample ? h("button", { class: "btn small", onclick: () => { S.openMatch = open ? null : id; render(); } }, open ? "閉じる" : m.result ? "結果を直す" : "結果を入力") : null));
+    if (open) card.append(matchEditor(id, m));
+    return card;
+  }
+
+  function matchEditor(id, m) {
+    let pick = m.result || null;
+    const picks = [["a", `${pName(m.a)} の勝ち`], ["draw", "引き分け"], ["b", `${pName(m.b)} の勝ち`]].map(([k, label]) =>
+      h("button", { class: "pick", type: "button", "aria-pressed": pick === k, onclick: (e) => { pick = k; for (const b of e.target.parentNode.children) b.setAttribute("aria-pressed", b === e.target); } }, label));
+    const score = h("input", { type: "text", id: `score-${id}`, placeholder: "スコア（例 112-98）", value: m.score || "" });
+    const url = h("input", { type: "url", id: `url-${id}`, class: "grow", placeholder: "BGA の卓 URL（任意）", value: m.url || "" });
+    const save = async () => {
+      if (!pick) { toast("勝敗を選んでください。"); return; }
+      if (url.value && !safeBgaUrl(url.value.trim())) { toast("URL は boardgamearena.com のものを入れてください。"); return; }
+      const ok = await write(`matches/${id}`, { result: pick, score: score.value.trim(), url: url.value.trim(), by: S.me || null, at: new Date().toISOString() }, "update");
+      if (ok) { S.openMatch = null; toast("結果を保存しました"); render(); }
+    };
+    const clear = async () => {
+      if (await write(`matches/${id}`, { result: null, score: "", url: "", by: null, at: null }, "update")) { S.openMatch = null; toast("結果を取り消しました"); render(); }
+    };
+    return h("div", { class: "editor" }, h("div", { class: "row" }, picks), h("div", { class: "row" }, score, url),
+      h("div", { class: "row" }, h("button", { class: "btn primary", onclick: save }, "保存する"), m.result ? armed("結果を取り消す", clear, "btn small danger") : null));
+  }
+
+  function viewBracket() {
+    const rounds = bracketRounds();
+    const admin = S.isAdmin || S.sample;
+    const allDone = S.matches.size && [...S.matches.values()].every((m) => m.result);
+    const gen = async () => {
+      const pairs = buildBracketSeeds();
+      if (pairs.length < 1 || !pairs.some((p) => p.a && p.b)) { toast("決勝に進む人が足りません。"); return; }
+      for (const k of [...S.ko.keys()]) await write(`ko/${k}`, null, "delete");
+      for (let i = 0; i < pairs.length; i++) await write(`ko/r0m${i}`, { ...pairs[i], winner: null });
+      toast("決勝トーナメントを作りました");
+    };
+    if (!rounds.length) return h("div", { class: "panel empty" }, h("h2", {}, "決勝トーナメントはまだです"),
+      h("p", {}, `グループリーグの各組上位 ${S.cfg.advance} 人で組みます。${allDone ? "グループの全試合が終わりました。" : "グループリーグの終了後に作るのがおすすめです。"}`),
+      admin && S.players.size ? (allDone ? h("button", { class: "btn primary", onclick: gen }, "今の順位で組み合わせを作る") : armed("今の順位で組み合わせを作る（未消化の試合あり）", gen, "btn")) : null);
+    const total = rounds.length; const final = rounds[total - 1][0];
+    const setW = async (m, who) => { if (!who || !(m.a && m.b)) return; const next = m.winner === who ? null : who; await write(`ko/${m.key}`, { winner: next }, "update"); };
+    const slot = (m, side) => {
+      const id = m[side]; const seed = side === "a" ? m.aSeed : m.bSeed; const pend = side === "a" ? m.pendA : m.pendB;
+      const label = id ? pName(id) : pend ? "未定" : "不戦";
+      return h("button", { class: m.winner && m.winner === id ? "won" : "", disabled: !(S.canWrite || S.sample) || !id || !(m.a && m.b),
+        title: id && m.a && m.b ? "クリックで勝者にする" : null, onclick: () => setW(m, id) },
+        h("span", { class: id ? "" : "tbd" }, label), seed ? h("span", { class: "seed" }, seed) : null);
+    };
+    return h("div", { style: "display:grid;gap:12px" },
+      h("p", { class: "hint" }, S.canWrite || S.sample ? "勝った人の名前を押すと次へ進みます。もう一度押すと取り消せます。" : "結果は運営と参加者が入力します。"),
+      h("div", { class: "panel" }, h("div", { class: "bracket" },
+        rounds.map((rs, i) => h("div", { class: "bcol" }, h("h3", {}, roundLabel(i, total)), rs.map((m) => h("div", { class: "bm" }, slot(m, "a"), slot(m, "b"))))),
+        h("div", { class: "champ" }, h("div", { class: "cup" }, "優勝"), h("div", { class: "who" }, final.winner ? pName(final.winner) : "―")))),
+      admin ? h("div", { class: "toolbar" }, armed("今の順位で組み直す（入力済みの決勝結果は消えます）", gen, "btn small danger")) : null);
+  }
+
+  function viewPlayers() {
+    if (!S.players.size && !(S.isAdmin || S.sample)) return emptyState();
+    const admin = S.isAdmin || S.sample;
+    const list = [...S.players.entries()].map(([id, p]) => ({ id, ...p })).sort((a, b) => (a.group || "Z").localeCompare(b.group || "Z") || a.name.localeCompare(b.name, "ja"));
+    const name = h("input", { type: "text", id: "newName", placeholder: "名前（表示名）" });
+    const bga = h("input", { type: "text", id: "newBga", placeholder: "BGA のユーザー名" });
+    const grp = h("select", { id: "newGroup" }, h("option", { value: "" }, "グループ未定"), groupsInUse().map((g) => h("option", { value: g }, `グループ ${g}`)));
+    const add = async () => {
+      const n = name.value.trim(); if (!n) { toast("名前を入れてください。"); return; }
+      if (await write(`players/${newId()}`, { name: n, bga: bga.value.trim(), group: grp.value })) { name.value = ""; bga.value = ""; name.focus(); toast(`${n} さんを登録しました`); }
+    };
+    return h("div", { style: "display:grid;gap:14px" },
+      admin ? h("section", { class: "panel" }, h("h2", {}, "参加者を追加"),
+        h("form", { class: "toolbar", onsubmit: (e) => { e.preventDefault(); add(); } }, name, bga, grp, h("button", { class: "btn primary", type: "submit" }, "追加"))) : null,
+      h("section", { class: "panel" }, h("h2", {}, "参加者一覧", h("small", {}, `${list.length} 人`)),
+        list.length ? h("div", { class: "scroll" }, h("table", {},
+          h("thead", {}, h("tr", {}, h("th", {}, "組"), h("th", {}, "名前"), h("th", {}, "BGA ユーザー名"), admin ? h("th", {}, "") : null)),
+          h("tbody", {}, list.map((p) => h("tr", {},
+            h("td", {}, admin ? h("select", { id: `grp-${p.id}`, onchange: (e) => write(`players/${p.id}`, { group: e.target.value }, "update") },
+              h("option", { value: "" }, "―"), groupsInUse().map((g) => h("option", { value: g, selected: p.group === g }, g))) : (p.group || "―")),
+            h("td", { class: "pname" }, p.name), h("td", { class: "bga" }, p.bga || "―"),
+            admin ? h("td", {}, armed("削除", () => write(`players/${p.id}`, null, "delete"), "btn small danger")) : null))))) : h("p", { class: "hint" }, "上のフォームから登録してください。")));
+  }
+
+  function viewSetup() {
+    const c = S.cfg;
+    const f = (id, label, input, hint) => h("div", { class: "field" }, h("label", { for: id }, label), input, hint ? h("span", { class: "hint" }, hint) : null);
+    const inp = (id, type, val, extra = {}) => h("input", { id, type, value: val ?? "", ...extra });
+    const groupSel = h("select", { id: "cfgGroups" }, [1, 2, 3, 4, 5, 6, 7, 8].map((n) => h("option", { value: n, selected: +c.groups === n }, `${n} グループ`)));
+    const advSel = h("select", { id: "cfgAdvance" }, [1, 2, 3, 4].map((n) => h("option", { value: n, selected: +c.advance === n }, `上位 ${n} 人`)));
+    const save = async (e) => {
+      e.preventDefault();
+      const data = {
+        name: $("#cfgName").value.trim() || DEFAULT_CFG.name, game: $("#cfgGame").value.trim(), groups: +groupSel.value, advance: +advSel.value,
+        ptsWin: +$("#cfgW").value || 0, ptsDraw: +$("#cfgD").value || 0, ptsLoss: +$("#cfgL").value || 0, deadline: $("#cfgDeadline").value,
+      };
+      if (await write("config/main", data)) toast("設定を保存しました");
+    };
+    const shuffle = async () => {
+      const ids = [...S.players.keys()].sort(() => Math.random() - 0.5); const gs = groupsInUse();
+      for (let i = 0; i < ids.length; i++) await write(`players/${ids[i]}`, { group: gs[i % gs.length] }, "update");
+      toast("グループに振り分けました");
+    };
+    const makeMatches = async () => {
+      const unassigned = [...S.players.values()].filter((p) => !groupsInUse().includes(p.group)).length;
+      for (const k of [...S.matches.keys()]) await write(`matches/${k}`, null, "delete");
+      let n = 0;
+      for (const g of groupsInUse()) for (const m of roundRobin(playersIn(g).map((p) => p.id))) { await write(`matches/${newId()}`, { group: g, ...m, result: null, score: "", url: "" }); n++; }
+      toast(`${n} 試合の対戦表を作りました${unassigned ? `（組未定の ${unassigned} 人は除外）` : ""}`);
+    };
+    const sizes = groupsInUse().map((g) => `${g}: ${playersIn(g).length}人`).join(" · ");
+    const perPlayer = Math.max(0, ...groupsInUse().map((g) => playersIn(g).length - 1));
+    return h("div", { style: "display:grid;gap:14px" },
+      h("section", { class: "panel" }, h("h2", {}, "大会の設定"),
+        h("form", { class: "form", onsubmit: save },
+          h("div", { class: "fields" },
+            f("cfgName", "リーグ名", inp("cfgName", "text", c.name)),
+            f("cfgGame", "ゲーム（BGA のタイトル）", inp("cfgGame", "text", c.game, { placeholder: "未定なら空のまま" })),
+            f("cfgDeadline", "グループリーグの締切", inp("cfgDeadline", "date", c.deadline))),
+          h("div", { class: "fields" },
+            f("cfgGroups", "グループ数", groupSel, "16人なら4組、32人なら8組が目安"),
+            f("cfgAdvance", "決勝に進む人数（各組）", advSel),
+            f("cfgW", "勝ち", inp("cfgW", "number", c.ptsWin, { min: 0, max: 10 })),
+            f("cfgD", "引き分け", inp("cfgD", "number", c.ptsDraw, { min: 0, max: 10 })),
+            f("cfgL", "負け", inp("cfgL", "number", c.ptsLoss, { min: 0, max: 10 }))),
+          h("div", {}, h("button", { class: "btn primary", type: "submit" }, "設定を保存")))),
+      h("section", { class: "panel" }, h("h2", {}, "グループと対戦表"),
+        h("p", { class: "hint" }, `現在 ${sizes}。1人あたり最大 ${perPlayer} 試合。`),
+        h("div", { class: "toolbar" },
+          S.players.size ? armed("全員をランダムに振り分け直す", shuffle, "btn") : h("button", { class: "btn", disabled: true }, "全員をランダムに振り分け直す"),
+          S.matches.size ? armed("対戦表を作り直す（入力済みの結果は消えます）", makeMatches) : h("button", { class: "btn primary", disabled: !S.players.size, onclick: makeMatches }, "対戦表を作る")),
+        h("p", { class: "hint" }, "参加者タブで一人ずつ組を変えることもできます。組を変えたら対戦表を作り直してください。")));
+  }
+
+  function go(tab) {
+    S.tab = TABS.includes(tab) ? tab : "standings";
+    try { history.replaceState(null, "", "#" + S.tab); } catch {}
+    render();
+  }
+  document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => go(b.dataset.tab)));
+
+  // ---------- サンプル ----------
+  function enterSample() {
+    real = { cfg: S.cfg, players: S.players, matches: S.matches, ko: S.ko };
+    S.sample = true; S.cfg = { ...DEFAULT_CFG, name: "盤士リーグ（サンプル）", game: "サンプルのゲーム" };
+    S.players = new Map(); S.matches = new Map(); S.ko = new Map();
+    let seed = 7; const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    for (let i = 0; i < 16; i++) S.players.set("s" + i, { name: `サンプル${String(i + 1).padStart(2, "0")}`, bga: `sample_${i + 1}`, group: GROUP_NAMES[i % 4] });
+    for (const g of groupsInUse()) roundRobin(playersIn(g).map((p) => p.id)).forEach((m, i) => {
+      const done = m.round < 3 || rnd() < 0.5; const x = rnd();
+      S.matches.set(`${g}${i}`, { group: g, ...m, result: done ? (x < 0.1 ? "draw" : x < 0.55 ? "a" : "b") : null, score: "", url: "" });
+    });
+    S.tab = "standings"; render();
+  }
+  $("#exitSample").addEventListener("click", () => {
+    S.sample = false; Object.assign(S, real); real = null; S.openMatch = null; render();
+  });
+
+  // ---------- 起動 ----------
+  const initial = (location.hash || "").slice(1); if (TABS.includes(initial)) S.tab = initial;
+  render();
+
+  (async () => {
+    const [db, user] = await Promise.all([window.claude?.use?.("db") ?? null, window.claude?.use?.("user") ?? null]);
+    S.user = user;
+    if (user) {
+      S.isAdmin = await user.canEdit().catch(() => false);
+      const cw = await user.can("data.write").catch(() => null); S.canWrite = cw !== false;
+      S.me = await user.id().catch(() => null);
+    } else S.canWrite = false;
+    if (!db) { S.loaded = true; S.canWrite = false; render(); return; }
+    S.db = db;
+    const live = (target) => (snap) => {
+      if (S.sample) { const m = new Map(); snap.docs.forEach((d) => m.set(d.id, d.data())); real[target] = m; return; }
+      S[target] = new Map(snap.docs.map((d) => [d.id, d.data()])); S.loaded = true; refreshNames(); render();
+    };
+    const onErr = (e) => { S.loaded = true; render(); toast(errMsg(e)); };
+    db.doc("config/main").onSnapshot((d) => {
+      const c = { ...DEFAULT_CFG, ...(d.exists ? d.data() : {}) };
+      if (S.sample) real.cfg = c; else { S.cfg = c; render(); }
+    }, onErr);
+    db.collection("players").onSnapshot(live("players"), onErr);
+    db.collection("matches").onSnapshot(live("matches"), onErr);
+    db.collection("ko").onSnapshot(live("ko"), onErr);
+    setTimeout(() => { if (!S.loaded) { S.loaded = true; render(); } }, 4000);
+  })();
+
+  async function refreshNames() {
+    if (!S.user || typeof S.user.profiles !== "function") return;
+    const ids = [...new Set([...S.matches.values()].map((m) => m.by).filter(Boolean))].filter((id) => !(id in S.names));
+    if (!ids.length) return;
+    try {
+      const ps = await S.user.profiles(ids);
+      for (const id of ids) S.names[id] = (ps[id] && ps[id].name) || "";
+      render();
+    } catch {}
+  }
+})();
+</script>
