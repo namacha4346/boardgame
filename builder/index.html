@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VS TEAMS 大会ビルダー</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+/* 設定 → 進行（入力）→ 集計・発表画面。設定から集計ページの中身が組み上がる */
+:root{
+  --bg:#f3f1ea; --surface:#fbfaf6; --fg:#141b33; --muted:#5d6273; --line:#ddd6c4;
+  --gold:#a57d24; --gold-soft:#f3e7c7; --ok:#2f7a5a; --ok-soft:#e3f0e9; --bad:#b4432f; --bad-soft:#f8e6e1;
+  --navy:#141b33;
+  --display:"Dela Gothic One","Noto Sans JP",system-ui,sans-serif;
+  --body:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#10142a; --surface:#181e38; --fg:#f2eee3; --muted:#a8adc0; --line:#2e365a;
+  --gold:#e0bb62; --gold-soft:#3a3220; --ok:#6fc29b; --ok-soft:#183a2f; --bad:#ff8a78; --bad-soft:#3e1f1d; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
+button.primary{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.small{padding:3px 9px;font-size:13px}
+button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-width:0}
+input[type=number]{width:5.5em}
+input[type=color]{padding:0;width:40px;height:32px}
+.board{background:var(--navy);color:#f2eee3}
+.board-in{max-width:1080px;margin:0 auto;padding:10px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:end}
+.brand{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.brand h1{margin:0;font-size:17px;font-weight:700}
+.brand small{color:#c9a24a;letter-spacing:.25em;font-size:11px;margin-right:.6em}
+.sync{font-size:12px;color:#c9c6bd}
+.tm{display:flex;flex-direction:column;min-width:0}
+.tm.b{align-items:flex-end;text-align:right}
+.tm .n{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.tm .s{font-family:var(--display);font-size:clamp(30px,6vw,46px);line-height:1;font-variant-numeric:tabular-nums}
+.vs{font-family:var(--display);color:#c9a24a;text-align:center}
+.vs small{display:block;font-family:var(--body);font-size:12px;color:#c9c6bd}
+main{max-width:1080px;margin:0 auto;padding:14px max(16px,env(safe-area-inset-right,0px)) 60px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:14px}
+nav.tabs{display:flex;gap:6px;flex-wrap:wrap}
+h2{font-size:20px;margin:6px 0 0}
+h3{font-size:16px;margin:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.between{justify-content:space-between}
+.hint{font-size:13px;color:var(--muted)}
+.lbl{font-size:12px;color:var(--muted);display:block}
+.field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.chip{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 9px;background:var(--gold-soft);color:var(--fg)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.warn{border:1px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 12px;font-size:14px}
+.phase{border-left:6px solid var(--gold)}
+.phase.event{border-left-color:var(--ok)}
+.tbl{border:1px dashed var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+table.seats{width:100%;border-collapse:collapse;font-size:14px}
+table.seats th,table.seats td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:middle}
+table.seats td.pt{font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto}
+.res{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:6px;font-weight:700}
+.res .v{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+.ta{color:var(--ta)}.tb{color:var(--tb)}
+textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:12px}
+/* 発表画面 */
+#stage{position:fixed;inset:0;z-index:30;background:radial-gradient(120% 90% at 50% 0%,#232c52 0%,#141b33 55%,#0a0e1b 100%);color:#f4efe2;display:flex;flex-direction:column;gap:1.4vh;padding:2.5vh max(16px,4vw) 1.5vh;overflow:auto}
+.st-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:2px solid #c9a24a;padding-bottom:1vh}
+.st-top b{font-family:var(--display);font-weight:400;font-size:clamp(20px,3vw,40px)}
+.st-top span{color:#e8c877;font-weight:700;letter-spacing:.1em;font-size:clamp(13px,1.6vw,22px)}
+.st-timer{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:2vw;align-items:center;border:1px solid rgba(201,162,74,.45);border-radius:14px;padding:.6vh 1.5vw 1vh;background:rgba(255,255,255,.04)}
+.st-timer .l{text-align:right;color:#e8c877;font-family:var(--display);font-size:clamp(14px,min(2.2vw,3.6vh),34px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-timer .t{font-family:var(--display);font-size:clamp(34px,min(7vw,10vh),120px);line-height:1;font-variant-numeric:tabular-nums}
+.st-timer .t[data-lv="warn"]{color:#f0cf7a}.st-timer .t[data-lv="last"]{color:#ff8a80}
+.st-timer .e{color:#c9c6bd;font-size:clamp(12px,min(1.5vw,2.5vh),22px)}
+.st-timer .bar{grid-column:1/-1;height:8px;background:rgba(255,255,255,.1);border-radius:999px;overflow:hidden}
+.st-timer .bar i{display:block;height:100%;background:#c9a24a}
+.st-main{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:2vw;align-items:center}
+.st-team{display:flex;flex-direction:column;align-items:center;gap:.4vh;min-width:0;text-align:center}
+.st-name{font-weight:700;font-size:clamp(16px,min(3.2vw,5vh),48px);overflow-wrap:anywhere}
+.st-score{font-family:var(--display);font-size:clamp(48px,min(14vw,17vh),230px);line-height:1;font-variant-numeric:tabular-nums}
+.st-items{display:flex;gap:.4em;align-items:center;min-height:1.8em;font-size:clamp(12px,min(1.7vw,2.8vh),24px)}
+.st-items .ib{display:inline-grid;place-items:center;width:1.6em;height:1.6em;border-radius:.35em;background:#c9a24a;color:#141b33;font-weight:700}
+.st-vs{font-family:var(--display);color:#c9a24a;font-size:clamp(22px,4vw,60px);text-align:center}
+.st-lead{font-size:clamp(12px,1.4vw,20px);color:#c9c6bd;text-align:center}
+.st-break{display:grid;gap:.5vh;max-width:1200px;width:100%;margin:0 auto}
+.st-row{display:grid;grid-template-columns:4em 1fr minmax(8em,16em) 1fr 4em;gap:1vw;align-items:center;font-size:clamp(11px,min(1.4vw,2.2vh),20px)}
+.st-row .v{font-family:var(--display);font-variant-numeric:tabular-nums}
+.st-row .va{text-align:right}
+.st-row .lab{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar{height:.7em;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;display:flex}
+.sbar.a{justify-content:flex-end}.sbar i{display:block;height:100%;border-radius:999px}
+.st-ctrl{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;opacity:.6;position:sticky;bottom:0}
+.st-ctrl:hover,.st-ctrl:focus-within{opacity:1}
+.st-ctrl button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#f4efe2}
+#stage.no-timer .st-timer{display:none}
+.alert{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;background:#b4432f;color:#fff;font-weight:700;padding:12px 20px;border-radius:12px;max-width:92vw;text-align:center}
+@media (max-width:640px){.st-row{grid-template-columns:3em 1fr 6em 1fr 3em}}
+</style>
+</head>
+<body>
+<header class="board">
+  <div class="board-in">
+    <div class="brand"><h1><small>VS TEAMS</small><span id="evName">大会ビルダー</span></h1><span class="sync" id="syncStat">この端末に保存</span></div>
+    <div class="tm a"><span class="n" id="nA"></span><span class="s" id="sA">0</span></div>
+    <div class="vs">VS<small id="lead"></small></div>
+    <div class="tm b"><span class="n" id="nB"></span><span class="s" id="sB">0</span></div>
+  </div>
+</header>
+<main>
+  <nav class="tabs" id="tabs" aria-label="画面"></nav>
+  <section id="panel" aria-live="polite"></section>
+</main>
+
+<div id="stage" hidden>
+  <div class="st-top"><b id="stTitle"></b><span id="stPhase"></span></div>
+  <div class="st-timer" id="stTimer"><span class="l" id="stTl"></span><span class="t" id="stTt">--:--</span><span class="e" id="stTe"></span><div class="bar"><i id="stTb" style="width:0%"></i></div></div>
+  <div class="st-main">
+    <div class="st-team" id="stA"><span class="st-name" id="stNA"></span><span class="st-score" id="stSA">0</span><span class="st-items" id="stIA"></span></div>
+    <div><div class="st-vs">VS</div><div class="st-lead" id="stLead"></div></div>
+    <div class="st-team" id="stB"><span class="st-name" id="stNB"></span><span class="st-score" id="stSB">0</span><span class="st-items" id="stIB"></span></div>
+  </div>
+  <div class="st-break" id="stBreak"></div>
+  <div class="st-ctrl">
+    <button type="button" data-act="timer-go" class="tgo">スタート</button>
+    <button type="button" data-act="st-timer">タイマーを隠す</button>
+    <button type="button" data-act="st-hide">点数を伏せる</button>
+    <button type="button" data-act="st-full">全画面</button>
+    <button type="button" data-act="st-close">入力画面に戻る</button>
+  </div>
+</div>
+<div class="alert" id="alert" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
