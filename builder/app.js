@@ -53,7 +53,7 @@ function sampleConfig() {
 function blankConfig() {
   return { name: "新しい大会", teams: [{ name: "チームA", color: "#c0392b" }, { name: "チームB", color: "#1f3a5f" }], teamSize: 4, roster: { A: [], B: [] }, items: [], phases: [] };
 }
-const blankResults = () => ({ seats: {}, names: {}, team: {}, duel: {}, ev: {} });
+const blankResults = () => ({ order: {}, team: {}, duel: {}, ev: {} });
 const blankTimer = () => ({ total: 60 * 60000, end: null, paused: null, label: "" });
 
 /* ---------- 状態 ---------- */
@@ -61,9 +61,13 @@ let doc = null;
 try { doc = JSON.parse(localStorage.getItem(LS_DOC) || "null"); } catch (_) { doc = null; }
 if (!doc || !doc.config) doc = { v: 1, config: sampleConfig(), results: blankResults(), timer: blankTimer(), savedAt: 0 };
 normalize();
-let tab = "setup";
-try { tab = localStorage.getItem(LS_TAB) || "setup"; } catch (_) {}
+let tab = "play";
+try { tab = localStorage.getItem(LS_TAB) || "play"; } catch (_) {}
+if (!["play", "sum", "setup", "data"].includes(tab)) tab = "play";
 let stageOn = false, stHidden = false, stTimer = true, maxSeen = doc.savedAt || 0;
+/* 当日画面：表示中の種目、開いている卓、同着の入力待ち */
+let cur = null, openT = {}, tieNext = {}, openP = {};
+try { cur = localStorage.getItem("vsteams-builder-cur"); } catch (_) {}
 
 function normalize() {
   const c = doc.config;
@@ -72,6 +76,19 @@ function normalize() {
   c.items = c.items || [];
   c.phases = c.phases || [];
   doc.results = Object.assign(blankResults(), doc.results || {});
+  const R = doc.results;
+  c.phases.forEach(ph => (ph.tables || []).forEach(tb => {
+    tb.names = tb.names || { A: [], B: [] };
+    /* 古い形式（名前を結果側に、順位を数字で持っていた）からの移しかえ */
+    if (R.names && R.names[tb.id]) { tb.names = R.names[tb.id]; }
+    if (R.seats && R.seats[tb.id] && !R.order[tb.id]) {
+      const list = [];
+      TEAMS.forEach(t => (R.seats[tb.id][t] || []).forEach((rk, i) => { if (rk != null) list.push({ t, i, rk }); }));
+      list.sort((a, b) => a.rk - b.rk);
+      R.order[tb.id] = list.map((x, k) => ({ t: x.t, i: x.i, tie: k > 0 && list[k - 1].rk === x.rk }));
+    }
+  }));
+  delete R.names; delete R.seats;
   doc.timer = Object.assign(blankTimer(), doc.timer || {});
   document.documentElement.style.setProperty("--ta", c.teams[0].color || "#c0392b");
   document.documentElement.style.setProperty("--tb", c.teams[1].color || "#1f3a5f");
@@ -79,8 +96,15 @@ function normalize() {
 const tn = t => esc(doc.config.teams[t === "A" ? 0 : 1].name || ("チーム" + t));
 
 /* ---------- 点数の計算 ---------- */
+/* 着順に押した記録（order）から順位を出す。同着は前の人と同じ順位 */
+function rankMap(tb) {
+  const ord = doc.results.order[tb.id] || [], m = { A: [], B: [] };
+  let rk = 0;
+  ord.forEach((o, k) => { if (!(o.tie && k > 0)) rk = k + 1; if (m[o.t]) m[o.t][o.i] = rk; });
+  return m;
+}
 function indivRes(tb) {
-  const R = doc.results.seats[tb.id] || {}, total = tb.perTeam * 2, pts = tb.points || [];
+  const R = rankMap(tb), total = tb.perTeam * 2, pts = tb.points || [];
   const seats = [];
   TEAMS.forEach(t => { for (let i = 0; i < tb.perTeam; i++) seats.push({ t, i, r: (R[t] || [])[i] ?? null }); });
   const out = { pts: { A: 0, B: 0 }, seat: {}, filled: 0, need: total };
@@ -180,8 +204,8 @@ const numOpts = (max, min = 0) => [["", "–"], ...Array.from({ length: max - mi
 /* ---------- 画面：設定 ---------- */
 function renderSetup() {
   const c = doc.config, pr = problems();
-  let h = `<div class="row between"><h2>設定</h2><div class="row"><button type="button" data-act="load-sample">見本（八人の盤士杯）を読み込む</button><button type="button" data-act="new-blank">白紙から作る</button></div></div>
-  <p class="hint" style="margin:0">ここで決めた内容に合わせて「進行」「集計」「発表画面」ができあがります。結果を入れたあとに卓や種目を消すと、その結果も消えます。</p>
+  let h = `<div class="row between"><h2>準備</h2><div class="row"><button type="button" data-act="load-sample">見本（八人の盤士杯）を読み込む</button><button type="button" data-act="new-blank">白紙から作る</button></div></div>
+  <p class="hint" style="margin:0">ここで決めた内容に合わせて「当日」「集計」「発表画面」ができあがります。結果を入れたあとに卓や種目を消すと、その結果も消えます。</p>
   ${pr.length ? `<div class="warn"><b>確認してください</b><ul style="margin:4px 0 0;padding-left:18px">${pr.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : '<div class="chip ok" style="align-self:flex-start">設定に問題はありません</div>'}
   <div class="grid">
     <article class="card"><h3>大会</h3>
@@ -191,7 +215,7 @@ function renderSetup() {
     ${TEAMS.map((t, i) => `<article class="card"><h3>チーム${t}</h3>
       <div class="row"><label class="field" style="flex:1"><span class="lbl">チーム名</span>${inp(`config.teams.${i}.name`, c.teams[i].name)}</label>
       <label class="field"><span class="lbl">色</span><input type="color" data-bind="config.teams.${i}.color" data-type="str" value="${esc(c.teams[i].color)}"></label></div>
-      <label class="field"><span class="lbl">メンバー（1行に1人。卓配置で選べます）</span><textarea data-bind="config.roster.${t}" data-type="lines" style="min-height:6em;font-family:var(--body);font-size:14px">${esc((c.roster[t] || []).join("\n"))}</textarea></label>
+      <label class="field"><span class="lbl">メンバー（1行に1人。卓割りの名前で選べます）</span><textarea data-bind="config.roster.${t}" data-type="lines" style="min-height:6em;font-family:var(--body);font-size:14px">${esc((c.roster[t] || []).join("\n"))}</textarea></label>
     </article>`).join("")}
   </div>
   <article class="card"><div class="row between"><h3>アイテム（デュエル卓の勝者がもらう特典）</h3><button type="button" class="small" data-act="add-item">＋ アイテムを追加</button></div>
@@ -204,6 +228,9 @@ function renderSetup() {
     const head = `<div class="row between"><div class="row"><span class="chip">${ph.type === "round" ? "ボードゲームROUND" : "全員参加の種目"}</span>${inp(P + ".name", ph.name, "str", 'style="font-weight:700"')}</div>
       <div class="row"><button type="button" class="small" data-act="move" data-i="${pi}" data-d="-1" ${pi === 0 ? "disabled" : ""}>↑</button><button type="button" class="small" data-act="move" data-i="${pi}" data-d="1" ${pi === c.phases.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="small danger" data-act="del-phase" data-i="${pi}">消す</button></div></div>
       <div class="row"><label class="field"><span class="lbl">時間帯（表示用）</span>${inp(P + ".time", ph.time, "str", 'placeholder="11:20〜12:30" style="width:9em"')}</label><label class="field"><span class="lbl">タイマーの分数</span>${inp(P + ".minutes", ph.minutes, "num", 'min="1" max="600"')}</label></div>`;
+    const nT = (ph.tables || []).length, nP = (ph.parts || []).length;
+    const sumLine = ph.type === "round" ? `${nT}卓・1チーム${(ph.tables || []).reduce((a, tb) => a + (Number(tb.perTeam) || 0), 0)}/${c.teamSize}人` : `${nP}項目`;
+    h += `<details class="pd" ${openP[ph.id] ? "open" : ""} data-pid="${ph.id}"><summary><span class="chip">${ph.type === "round" ? "ROUND" : "種目"}</span><b>${esc(ph.name)}</b><span class="hint">${esc(ph.time || "")}　${sumLine}</span></summary>`;
     if (ph.type === "round") {
       const sum = (ph.tables || []).reduce((a, tb) => a + (Number(tb.perTeam) || 0), 0);
       h += `<article class="card phase">${head}
@@ -218,11 +245,12 @@ function renderSetup() {
             ${tb.kind === "indiv" ? `<label class="field"><span class="lbl">配点（1位から順に、カンマ区切り・${tb.perTeam * 2}人分）</span>${inp(T + ".points", (tb.points || []).join(","), "list")}</label>` : ""}
             ${tb.kind === "team" ? `<div class="row"><label class="field"><span class="lbl">勝ちチームの点</span>${inp(T + ".win", tb.win, "num")}</label><label class="field"><span class="lbl">引き分けの点（各チーム）</span>${inp(T + ".draw", tb.draw, "num")}</label></div>` : ""}
             ${tb.kind === "duel" ? `<label class="field"><span class="lbl">勝ったチームがもらうアイテム</span>${sel(T + ".item", tb.item, [["", "（選ぶ）"], ...c.items.map((it, i) => [it.id, (i + 1) + "　" + it.name])])}</label>` : ""}
-            <label class="field"><span class="lbl">進行役（任意）</span>${inp(T + ".host", tb.host, "str", 'style="width:10em"')}</label>
+            <div class="row" style="align-items:flex-start">${TEAMS.map(t => `<div class="field"><span class="lbl ${t === "A" ? "ta" : "tb"}">${tn(t)} の席（名前・任意）</span>${Array.from({ length: tb.perTeam }, (_, i) => `<input list="ros${t}" data-bind="${T}.names.${t}.${i}" data-type="str" value="${esc(((tb.names || {})[t] || [])[i] || "")}" placeholder="${t}${i + 1}" style="width:9em;margin-top:3px">`).join("")}</div>`).join("")}
+            <label class="field"><span class="lbl">進行役（任意）</span>${inp(T + ".host", tb.host, "str", 'style="width:9em"')}</label></div>
           </div>`;
         }).join("")}
         <div class="row"><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="indiv">＋ 個人戦の卓</button><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="team">＋ チーム戦の卓</button><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="duel">＋ デュエル卓</button></div>
-      </article>`;
+      </article></details>`;
     } else {
       h += `<article class="card phase event">${head}
         ${(ph.parts || []).map((pt, ki) => {
@@ -240,65 +268,86 @@ function renderSetup() {
         }).join("")}
         <div><button type="button" class="small" data-act="add-part" data-i="${pi}">＋ 項目を追加</button></div>
         <p class="hint" style="margin:0">人数×点：渡せた人数・抜けた人数など。段階で点：正しい文字数などで点が変わる。先着：先にクリアしたチームだけ点が入る。</p>
-      </article>`;
+      </article></details>`;
     }
   });
   if (!c.phases.length) h += '<p class="hint">まだ何もありません。上のボタンでROUNDや種目を追加してください。</p>';
-  return h;
+  return h + `<datalist id="rosA">${(c.roster.A || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist><datalist id="rosB">${(c.roster.B || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`;
 }
 
-/* ---------- 画面：進行（結果の入力） ---------- */
-function rosterList(t) { return `<datalist id="ros${t}">${(doc.config.roster[t] || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`; }
+/* ---------- 画面：当日（結果の入力） ---------- */
+/* 名前が未入力の席は「A1」「B2」のように出す（色でチームがわかる） */
+const nameOf = (tb, t, i) => ((tb.names || {})[t] || [])[i] || `${t}${i + 1}`;
+function curPhase() {
+  const ps = doc.config.phases;
+  let i = ps.findIndex(p => p.id === cur);
+  if (i < 0) { i = ps.findIndex(p => phaseRes(p).status !== "done"); if (i < 0) i = ps.length - 1; }
+  return i;
+}
+function timerBar(ph) {
+  const set = doc.timer.label === ph.name;
+  return `<article class="card tbar"><div class="row between">
+      <div class="row"><span class="hint">タイマー${doc.timer.label ? "（" + esc(doc.timer.label) + "）" : ""}</span><span class="tbig" id="tmBig">--:--</span><span class="hint" id="tmEnd"></span></div>
+      <div class="row">${set ? "" : `<button type="button" data-act="timer-set" data-label="${esc(ph.name)}" data-min="${ph.minutes || 60}">${esc(ph.name)}の${ph.minutes || 60}分にする</button>`}
+        <button type="button" class="primary tgo" data-act="timer-go">スタート</button><button type="button" data-act="timer-reset">リセット</button><button type="button" data-act="timer-sound" id="tmSound">音：オフ</button></div>
+    </div></article>`;
+}
+function tableCard(tb) {
+  const r = tableRes(tb), done = r.status === "done", open = openT[tb.id] || !done;
+  const sumTxt = tb.kind === "duel" ? (r.win ? `${tn(r.win)} の勝ち（アイテム獲得）` : "") : `<span class="ta">${fmt(r.pts.A)}</span> − <span class="tb">${fmt(r.pts.B)}</span>`;
+  let h = `<article class="card tcard${done ? " done" : ""}"><button type="button" class="thead" data-act="toggle-table" data-tb="${tb.id}" aria-expanded="${open}">
+      <span class="tname">${done ? "✓ " : ""}${esc(tb.game || "（ゲーム名なし）")}</span><span class="tsum">${sumTxt}</span><span class="hint">${KIND_LABEL[tb.kind]}・${tb.perTeam}対${tb.perTeam}</span></button>`;
+  if (!open) return h + `</article>`;
+  if (tb.kind === "indiv") {
+    const rm = rankMap(tb), ord = doc.results.order[tb.id] || [], total = tb.perTeam * 2, n = ord.length;
+    const next = n >= total ? null : (tieNext[tb.id] && n > 0 ? rm[ord[n - 1].t][ord[n - 1].i] : n + 1);
+    h += `<p class="guide">${n >= total ? "全員の順位が入りました。" : `<b>${next}位</b>の人を押してください${tieNext[tb.id] ? "（前の人と同着）" : ""}`}</p><div class="seatgrid">`;
+    TEAMS.forEach(t => { for (let i = 0; i < tb.perTeam; i++) {
+      const rk = rm[t][i];
+      h += `<button type="button" class="seat ${t === "A" ? "sa" : "sb"}${rk ? " ranked" : ""}" data-act="pick" data-tb="${tb.id}" data-t="${t}" data-i="${i}"><span class="rk">${rk ? rk + "位" : ""}</span><span class="nm">${esc(nameOf(tb, t, i))}</span><span class="pt">${rk ? fmt(r.seat[t + i]) + "点" : ""}</span></button>`;
+    } });
+    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id]}" ${n === 0 || n >= total ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button></div>
+      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。</p>`;
+  } else {
+    const cur2 = tb.kind === "team" ? doc.results.team[tb.id] : doc.results.duel[tb.id];
+    const opts = [["A", tn("A") + " の勝ち", "sa"], ["B", tn("B") + " の勝ち", "sb"]];
+    if (tb.kind === "team") opts.push(["draw", "引き分け", ""]);
+    h += `<div class="winrow">${opts.map(([v, l, cl]) => `<button type="button" class="win ${cl}" data-act="win" data-tb="${tb.id}" data-k="${tb.kind}" data-v="${v}" aria-pressed="${cur2 === v}">${l}</button>`).join("")}</div>`;
+    if (tb.kind === "duel") { const it = doc.config.items.find(i => i.id === tb.item); h += `<p class="hint" style="margin:0">点数なし。勝ったチームが「${esc(it ? it.name : "アイテム")}」をもらう。</p>`; }
+  }
+  return h + `</article>`;
+}
+function partCard(pt, er) {
+  const reps = Math.max(1, pt.reps || 1);
+  let h = `<article class="card"><div class="row between"><h3>${esc(pt.name)}</h3><span class="tsum"><span class="ta">${fmt(er.part[pt.id].A)}</span> − <span class="tb">${fmt(er.part[pt.id].B)}</span></span></div>`;
+  for (let k = 0; k < reps; k++) {
+    if (reps > 1) h += `<div class="qlabel">第${k + 1}問</div>`;
+    TEAMS.forEach(t => {
+      const v = (((doc.results.ev[pt.id] || {})[t]) || [])[k], p = partPts(pt, v);
+      let ctl;
+      if (pt.mode === "count" || pt.mode === "tier") ctl = Array.from({ length: (pt.max || 8) + 1 }, (_, n) => `<button type="button" class="num" data-act="num" data-pt="${pt.id}" data-t="${t}" data-k="${k}" data-v="${n}" aria-pressed="${v === n}">${n}</button>`).join("");
+      else if (pt.mode === "first") ctl = [...(pt.options || []), [0, "なし"]].map(([pv, l]) => `<button type="button" class="num wide" data-act="num" data-pt="${pt.id}" data-t="${t}" data-k="${k}" data-v="${pv}" data-first="1" aria-pressed="${v === pv}">${esc(l)}${pv ? `（${pv}）` : ""}</button>`).join("");
+      else ctl = inp(`results.ev.${pt.id}.${t}.${k}`, v, "num", 'step="0.5" style="width:6em"');
+      h += `<div class="numrow"><span class="nteam ${t === "A" ? "ta" : "tb"}">${tn(t)}</span><div class="nums">${ctl}</div><span class="npt">${p != null ? fmt(p) + "点" : "–"}</span></div>`;
+    });
+  }
+  return h + `</article>`;
+}
 function renderPlay() {
   const c = doc.config;
-  if (!c.phases.length) return '<h2>進行</h2><p class="hint">先に「設定」でROUNDや種目を作ってください。</p>';
-  let h = `<h2>進行</h2>${rosterList("A")}${rosterList("B")}`;
-  c.phases.forEach(ph => {
-    const pr = phaseRes(ph);
-    h += `<div class="row between" style="margin-top:6px"><h3 style="font-size:18px">${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h3><div class="row">${chip(pr.status)}<b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b><button type="button" class="small" data-act="timer-set" data-label="${esc(ph.name)}" data-min="${ph.minutes || 60}">タイマーに${ph.minutes || 60}分をセット</button></div></div><div class="grid">`;
-    if (ph.type === "round") {
-      (ph.tables || []).forEach(tb => {
-        const r = tableRes(tb);
-        h += `<article class="card"><div class="row between"><h3>${esc(tb.game || "（ゲーム名なし）")}</h3><span class="hint">${KIND_LABEL[tb.kind]}・${tb.perTeam}対${tb.perTeam}</span></div>`;
-        if (tb.kind === "indiv") {
-          h += `<div class="scroll"><table class="seats"><tr><th>チーム</th><th>名前</th><th>順位</th><th>点</th></tr>`;
-          TEAMS.forEach(t => { for (let i = 0; i < tb.perTeam; i++) {
-            h += `<tr><td class="${t === "A" ? "ta" : "tb"}">${t}</td><td><input list="ros${t}" data-bind="results.names.${tb.id}.${t}.${i}" data-type="str" value="${esc(((doc.results.names[tb.id] || {})[t] || [])[i] || "")}" style="width:8em"></td><td>${sel(`results.seats.${tb.id}.${t}.${i}`, ((doc.results.seats[tb.id] || {})[t] || [])[i], rankOpts(tb.perTeam * 2), "num")}</td><td class="pt">${r.seat[t + i] != null ? fmt(r.seat[t + i]) : "–"}</td></tr>`;
-          } });
-          h += `</table></div><p class="hint" style="margin:0">同着は同じ順位を選ぶと、点数を分け合います。</p>`;
-        } else {
-          const path = tb.kind === "team" ? `results.team.${tb.id}` : `results.duel.${tb.id}`;
-          const cur = tb.kind === "team" ? doc.results.team[tb.id] : doc.results.duel[tb.id];
-          const opts = [["", "結果を選ぶ"], ["A", doc.config.teams[0].name + " の勝ち"], ["B", doc.config.teams[1].name + " の勝ち"]];
-          if (tb.kind === "team") opts.push(["draw", "引き分け"]);
-          h += `<label class="field"><span class="lbl">結果</span>${sel(path, cur, opts)}</label>`;
-          if (tb.kind === "duel") { const it = c.items.find(i => i.id === tb.item); h += `<p class="hint" style="margin:0">点数なし。勝ったチームが「${esc(it ? it.name : "アイテム")}」をもらう。</p>`; }
-        }
-        h += `<div class="res"><span>${tb.kind === "duel" ? (r.win ? "獲得：" + tn(r.win) : "–") : "この卓"}</span><span><span class="v ta">${fmt(r.pts.A)}</span> − <span class="v tb">${fmt(r.pts.B)}</span></span></div></article>`;
-      });
-    } else {
-      const er = eventRes(ph);
-      (ph.parts || []).forEach(pt => {
-        const reps = Math.max(1, pt.reps || 1);
-        h += `<article class="card"><div class="row between"><h3>${esc(pt.name)}</h3><span class="hint">${MODE_LABEL[pt.mode]}</span></div><div class="scroll"><table class="seats"><tr><th></th>${TEAMS.map(t => `<th class="${t === "A" ? "ta" : "tb"}">${tn(t)}</th><th></th>`).join("")}</tr>`;
-        for (let k = 0; k < reps; k++) {
-          h += `<tr><td>${reps > 1 ? `第${k + 1}問` : ""}</td>`;
-          TEAMS.forEach(t => {
-            const path = `results.ev.${pt.id}.${t}.${k}`, v = (((doc.results.ev[pt.id] || {})[t]) || [])[k];
-            let ctl;
-            if (pt.mode === "count" || pt.mode === "tier") ctl = sel(path, v, numOpts(pt.max || 8), "num");
-            else if (pt.mode === "first") ctl = sel(path, v, [["", "–"], ...(pt.options || []).map(([p, l]) => [p, `${l}（${p}点）`]), [0, "0点"]], "num", `data-first="${pt.id}.${k}"`);
-            else ctl = inp(path, v, "num", 'step="0.5" style="width:5em"');
-            const p = partPts(pt, v);
-            h += `<td>${ctl}</td><td class="pt">${p != null ? fmt(p) : "–"}</td>`;
-          });
-          h += `</tr>`;
-        }
-        h += `</table></div><div class="res"><span>小計</span><span><span class="v ta">${fmt(er.part[pt.id].A)}</span> − <span class="v tb">${fmt(er.part[pt.id].B)}</span></span></div></article>`;
-      });
-    }
-    h += `</div>`;
-  });
+  if (!c.phases.length) return '<p class="hint">まだ大会の中身がありません。「準備」でROUNDや種目を作ってください。</p>';
+  const pi = curPhase(), ph = c.phases[pi], pr = phaseRes(ph);
+  let h = `<nav class="pills" aria-label="種目">${c.phases.map((p, i) => { const s = phaseRes(p).status; return `<button type="button" data-act="phase" data-i="${i}" aria-pressed="${i === pi}"><span class="dot ${s}"></span>${esc(p.name)}</button>`; }).join("")}</nav>
+    <div class="row between"><h2>${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h2><div class="row">${chip(pr.status)}<b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b><button type="button" data-act="st-open">発表画面</button></div></div>
+    ${timerBar(ph)}`;
+  if (ph.type === "round") {
+    const tbs = ph.tables || [], left = tbs.filter(tb => tableRes(tb).status !== "done");
+    h += `<div class="grid">${[...left, ...tbs.filter(tb => !left.includes(tb))].map(tableCard).join("")}</div>`;
+  } else {
+    const er = eventRes(ph);
+    h += `<div class="grid">${(ph.parts || []).map(pt => partCard(pt, er)).join("")}</div>`;
+  }
+  h += `<div class="row between">${pi > 0 ? `<button type="button" data-act="phase" data-i="${pi - 1}">← ${esc(c.phases[pi - 1].name)}</button>` : "<span></span>"}${pi < c.phases.length - 1 ? `<button type="button" class="primary" data-act="phase" data-i="${pi + 1}">${esc(c.phases[pi + 1].name)} →</button>` : ""}</div>`;
   return h;
 }
 
@@ -310,29 +359,6 @@ function renderSum() {
   return `<h2>集計</h2><article class="card"><div class="scroll"><table class="seats"><tr><th>種目</th><th></th><th class="ta">${tn("A")}</th><th class="tb">${tn("B")}</th></tr>${rows}<tr><th>合計</th><th></th><th class="pt ta">${fmt(t.A)}</th><th class="pt tb">${fmt(t.B)}</th></tr></table></div>
   <div class="row"><button type="button" class="primary" data-act="st-open">発表画面を開く</button><button type="button" data-act="copy">結果を文字でコピー</button><span class="hint" id="copymsg"></span></div></article>
   <div class="grid">${items("A")}${items("B")}</div>`;
-}
-
-/* ---------- 画面：卓配置 ---------- */
-function renderSeat() {
-  let h = '<h2>卓配置</h2><p class="hint" style="margin:0">名前は「進行」で入れた内容が出ます。</p>';
-  doc.config.phases.filter(ph => ph.type === "round").forEach(ph => {
-    h += `<h3 style="margin-top:8px">${esc(ph.name)}</h3><div class="grid">${(ph.tables || []).map(tb => `<article class="card"><div class="row between"><h3>${esc(tb.game || "卓")}</h3><span class="hint">${KIND_LABEL[tb.kind]}</span></div>
-      ${TEAMS.map(t => `<div><span class="lbl ${t === "A" ? "ta" : "tb"}">${tn(t)}</span>${(((doc.results.names[tb.id] || {})[t]) || []).filter(Boolean).map(esc).join("、") || '<span class="hint">未入力</span>'}</div>`).join("")}
-      ${tb.host ? `<div class="hint">進行役：${esc(tb.host)}</div>` : ""}</article>`).join("")}</div>`;
-  });
-  return h;
-}
-
-/* ---------- 画面：タイマー ---------- */
-function renderTimer() {
-  const m = Math.floor(doc.timer.total / 60000);
-  return `<h2>タイマー</h2><article class="card">
-    <div class="row"><label class="field"><span class="lbl">分</span><input id="tmMin" type="number" min="1" max="600" value="${m}"></label><label class="field" style="flex:1"><span class="lbl">表示名</span><input id="tmLabel" value="${esc(doc.timer.label)}" placeholder="例：ROUND 1"></label></div>
-    <div class="row">${doc.config.phases.map(ph => `<button type="button" class="small" data-act="timer-set" data-label="${esc(ph.name)}" data-min="${ph.minutes || 60}">${esc(ph.name)} ${ph.minutes || 60}分</button>`).join("")}</div>
-    <div style="font-family:var(--display);font-size:clamp(56px,14vw,120px);line-height:1;font-variant-numeric:tabular-nums" id="tmBig">--:--</div>
-    <div class="hint" id="tmEnd"></div>
-    <div class="row"><button type="button" class="primary tgo" data-act="timer-go">スタート</button><button type="button" data-act="timer-reset">リセット</button><button type="button" data-act="timer-sound" id="tmSound">音：オフ</button><button type="button" data-act="st-open">発表画面に出す</button></div>
-    <p class="hint" style="margin:0">残り15分・5分・時間切れで画面下に知らせが出ます。共有していると、どの端末からでも同じタイマーを動かせます。</p></article>`;
 }
 
 /* ---------- 画面：データ・共有 ---------- */
@@ -354,7 +380,7 @@ function renderData() {
 }
 
 /* ---------- 描画 ---------- */
-const TABS = [["setup", "設定"], ["play", "進行"], ["sum", "集計"], ["seat", "卓配置"], ["timer", "タイマー"], ["data", "データ・共有"]];
+const TABS = [["play", "当日"], ["sum", "集計"], ["setup", "準備"], ["data", "データ・共有"]];
 function renderBoard() {
   const t = totals();
   $("evName").textContent = doc.config.name || "大会ビルダー";
@@ -366,7 +392,7 @@ function renderBoard() {
 function renderTabs() { $("tabs").innerHTML = TABS.map(([k, l]) => `<button type="button" data-tab="${k}" aria-pressed="${k === tab}">${l}</button>`).join(""); }
 function renderPanel() {
   const a = document.activeElement, keep = a && a.dataset && a.dataset.bind;
-  $("panel").innerHTML = tab === "setup" ? renderSetup() : tab === "play" ? renderPlay() : tab === "sum" ? renderSum() : tab === "seat" ? renderSeat() : tab === "timer" ? renderTimer() : renderData();
+  $("panel").innerHTML = tab === "setup" ? renderSetup() : tab === "play" ? renderPlay() : tab === "sum" ? renderSum() : renderData();
   if (keep) { const el = document.querySelector(`[data-bind="${CSS.escape(keep)}"]`); if (el && el.tagName === "INPUT") { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } }
   tick(true);
 }
@@ -442,6 +468,9 @@ document.addEventListener("change", e => { const el = e.target; if (el.dataset &
 document.addEventListener("input", e => { const el = e.target; if (el.dataset && el.dataset.bind && el.tagName !== "SELECT" && el.dataset.type !== "list" && el.dataset.type !== "pairs") onBind(el, false); });
 
 /* ---------- 操作 ---------- */
+function newPid() { const id = uid("p"); openP[id] = true; return id; }
+function findTable(id) { for (const ph of doc.config.phases) for (const tb of (ph.tables || [])) if (tb.id === id) return tb; return null; }
+document.addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.pid) openP[d.dataset.pid] = d.open; }, true);
 function newTable(kind, ph) {
   const left = Math.max(1, doc.config.teamSize - (ph.tables || []).reduce((a, tb) => a + (Number(tb.perTeam) || 0), 0));
   const per = kind === "duel" ? 1 : kind === "team" ? 2 : Math.min(left, 3);
@@ -457,14 +486,34 @@ document.addEventListener("click", async e => {
     case "new-blank": doc.config = blankConfig(); doc.results = blankResults(); changed(true); break;
     case "add-item": c.items.push({ id: uid("i"), name: "アイテム" + (c.items.length + 1), desc: "" }); changed(true); break;
     case "del-item": { const id = c.items[i].id; c.items.splice(i, 1); c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === id) tb.item = ""; })); changed(true); break; }
-    case "add-round": c.phases.push({ id: uid("p"), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
-    case "add-event": c.phases.push({ id: uid("p"), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
+    case "add-round": c.phases.push({ id: newPid(), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
+    case "add-event": c.phases.push({ id: newPid(), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
     case "move": { const d = Number(b.dataset.d), k = i + d; if (k < 0 || k >= c.phases.length) break; [c.phases[i], c.phases[k]] = [c.phases[k], c.phases[i]]; changed(true); break; }
     case "del-phase": c.phases.splice(i, 1); changed(true); break;
     case "add-table": c.phases[i].tables.push(newTable(b.dataset.k, c.phases[i])); changed(true); break;
     case "del-table": c.phases[i].tables.splice(j, 1); changed(true); break;
     case "add-part": c.phases[i].parts.push({ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); changed(true); break;
     case "del-part": c.phases[i].parts.splice(j, 1); changed(true); break;
+    case "phase": cur = c.phases[i].id; try { localStorage.setItem("vsteams-builder-cur", cur); } catch (_) {} renderPanel(); window.scrollTo({ top: 0 }); break;
+    case "toggle-table": { const id = b.dataset.tb, tb = findTable(id); openT[id] = !(openT[id] || tableRes(tb).status !== "done"); renderPanel(); break; }
+    case "pick": {
+      const id = b.dataset.tb, t = b.dataset.t, k = Number(b.dataset.i), tb = findTable(id);
+      const ord = doc.results.order[id] = doc.results.order[id] || [];
+      const at = ord.findIndex(o => o.t === t && o.i === k);
+      if (at >= 0) { ord.splice(at, 1); if (ord[at]) ord[at].tie = ord[at].tie && at > 0; }
+      else if (ord.length < tb.perTeam * 2) { ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 }); tieNext[id] = false; }
+      changed(true); break;
+    }
+    case "tie": tieNext[b.dataset.tb] = !tieNext[b.dataset.tb]; renderPanel(); break;
+    case "undo-rank": { const ord = doc.results.order[b.dataset.tb] || []; ord.pop(); tieNext[b.dataset.tb] = false; changed(true); break; }
+    case "clear-rank": if (b.dataset.sure) { doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; changed(true); } else { b.dataset.sure = "1"; b.textContent = "本当にやり直す"; } break;
+    case "win": { const box = b.dataset.k === "team" ? doc.results.team : doc.results.duel, v = b.dataset.v; box[b.dataset.tb] = box[b.dataset.tb] === v ? undefined : v; changed(true); break; }
+    case "num": {
+      const { pt, t, k } = b.dataset, v = Number(b.dataset.v), path = `results.ev.${pt}.${t}.${k}`;
+      setPath(path, getPath(path) === v ? null : v);
+      if (b.dataset.first && v > 0 && getPath(path) === v) setPath(`results.ev.${pt}.${other(t)}.${k}`, 0);
+      changed(true); break;
+    }
     case "st-open": stageOn = true; renderStage(); tick(true); break;
     case "st-close": stageOn = false; try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (_) {} renderStage(); break;
     case "st-hide": stHidden = !stHidden; renderStage(); break;
