@@ -144,6 +144,8 @@ details.pd>.card{border:0;border-radius:0 0 14px 14px}
 #stage.no-timer .st-timer{display:none}
 .alert{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;background:#b4432f;color:#fff;font-weight:700;padding:12px 20px;border-radius:12px;max-width:92vw;text-align:center}
 @media (max-width:640px){.st-row{grid-template-columns:3em 1fr 6em 1fr 3em}}
+.undo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:41;background:var(--navy);color:#fff;padding:10px 12px 10px 18px;border-radius:12px;display:flex;gap:14px;align-items:center;max-width:92vw;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.undo button{background:#c9a24a;border-color:#c9a24a;color:#141b33;font-weight:700}
 </style>
 </head>
 <body>
@@ -178,6 +180,7 @@ details.pd>.card{border:0;border-radius:0 0 14px 14px}
   </div>
 </div>
 <div class="alert" id="alert" hidden></div>
+<div class="undo" id="undo" hidden role="status"><span id="undoMsg"></span><button type="button" data-act="undo">元に戻す</button></div>
 
 <script src="app.js"></script>
 </body>

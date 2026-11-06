@@ -13,6 +13,8 @@ const TEAMS = ["A", "B"];
 const other = t => t === "A" ? "B" : "A";
 const r1 = n => Math.round(n * 10) / 10;
 const fmt = n => (Math.round(n * 10) / 10).toString();
+/* 共有先として受け付けるURL（Apps Script。動作確認用に localhost も可） */
+const SYNC_URL_OK = /^(https:\/\/script\.google\.com\/|http:\/\/localhost[:\/])/;
 const LS_DOC = "vsteams-builder-doc", LS_SYNC = "vsteams-builder-sync", LS_TAB = "vsteams-builder-tab";
 
 /* 卓の人数ごとの標準配点（個人戦） */
@@ -59,28 +61,78 @@ const blankTimer = () => ({ total: 60 * 60000, end: null, paused: null, label: "
 /* ---------- 状態 ---------- */
 let doc = null;
 try { doc = JSON.parse(localStorage.getItem(LS_DOC) || "null"); } catch (_) { doc = null; }
-if (!doc || !doc.config) doc = { v: 1, config: sampleConfig(), results: blankResults(), timer: blankTimer(), savedAt: 0 };
-normalize();
+if (!doc || !doc.config) doc = { v: 2, config: sampleConfig(), results: blankResults(), timer: blankTimer(), rts: {}, cts: 0, tts: 0 };
 let tab = "play";
 try { tab = localStorage.getItem(LS_TAB) || "play"; } catch (_) {}
 if (!["play", "sum", "setup", "data"].includes(tab)) tab = "play";
-let stageOn = false, stHidden = false, stTimer = true, maxSeen = doc.savedAt || 0;
+let stageOn = false, stHidden = false, stTimer = true, maxSeen = 0;
 /* 当日画面：表示中の種目、開いている卓、同着の入力待ち */
 let cur = null, openT = {}, tieNext = {}, openP = {};
 try { cur = localStorage.getItem("vsteams-builder-cur"); } catch (_) {}
 
+/* 読み込んだデータ・共有のデータは信用せず、形と値をそろえる（画面に入れる値を安全にする） */
+const ID = /^[A-Za-z0-9_-]{1,40}$/, COLOR = /^#[0-9a-fA-F]{6}$/;
+const okId = (v, p) => typeof v === "string" && ID.test(v) ? v : uid(p);
+const num = (v, d, lo = -1e6, hi = 1e6) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const int = (v, d, lo, hi) => Math.round(num(v, d, lo, hi));
+const tnum = (v, d) => num(v, d, 0, Number.MAX_SAFE_INTEGER); /* 時刻（ミリ秒） */
+const str = (v, max = 200) => (v == null ? "" : String(v)).slice(0, max);
+const strs = (a, max) => Array.isArray(a) ? a.slice(0, 60).map(x => str(x, max)) : [];
+function sanitizeConfig(c) {
+  c = c && typeof c === "object" ? c : blankConfig();
+  const dc = blankConfig().teams;
+  const out = { name: str(c.name, 80), teamSize: int(c.teamSize, 4, 1, 30) };
+  out.teams = [0, 1].map(i => { const t = (c.teams || [])[i] || {}; return { name: str(t.name, 60) || dc[i].name, color: COLOR.test(t.color) ? t.color : dc[i].color }; });
+  out.roster = { A: strs((c.roster || {}).A, 40), B: strs((c.roster || {}).B, 40) };
+  out.items = (Array.isArray(c.items) ? c.items : []).slice(0, 30).map(it => ({ id: okId(it && it.id, "i"), name: str(it && it.name, 40), desc: str(it && it.desc, 200) }));
+  out.phases = (Array.isArray(c.phases) ? c.phases : []).slice(0, 40).map(ph => {
+    ph = ph || {};
+    const o = { id: okId(ph.id, "p"), type: ph.type === "event" ? "event" : "round", name: str(ph.name, 60), time: str(ph.time, 40), minutes: int(ph.minutes, 60, 1, 600) };
+    if (o.type === "round") o.tables = (Array.isArray(ph.tables) ? ph.tables : []).slice(0, 30).map(tb => {
+      tb = tb || {};
+      const kind = ["indiv", "team", "duel"].includes(tb.kind) ? tb.kind : "indiv";
+      const per = kind === "duel" ? 1 : int(tb.perTeam, 2, 1, 10);
+      return { id: okId(tb.id, "t"), game: str(tb.game, 60), kind, perTeam: per, points: Array.isArray(tb.points) ? tb.points.slice(0, 40).map(x => num(x, 0)) : [],
+        win: num(tb.win, 6), draw: num(tb.draw, 3), item: typeof tb.item === "string" && ID.test(tb.item) ? tb.item : "", host: str(tb.host, 40),
+        names: { A: strs((tb.names || {}).A, 40), B: strs((tb.names || {}).B, 40) } };
+    });
+    else o.parts = (Array.isArray(ph.parts) ? ph.parts : []).slice(0, 30).map(pt => {
+      pt = pt || {};
+      return { id: okId(pt.id, "e"), name: str(pt.name, 60), mode: ["count", "tier", "manual", "first"].includes(pt.mode) ? pt.mode : "count", reps: int(pt.reps, 1, 1, 20), max: int(pt.max, 8, 1, 30),
+        per: num(pt.per, 1), bonusAt: int(pt.bonusAt, 0, 0, 30), bonus: num(pt.bonus, 0),
+        tiers: (Array.isArray(pt.tiers) ? pt.tiers : []).slice(0, 20).map(x => [num((x || [])[0], 0), num((x || [])[1], 0)]),
+        options: (Array.isArray(pt.options) ? pt.options : []).slice(0, 20).map(x => [num((x || [])[0], 0), str((x || [])[1], 30)]) };
+    });
+    return o;
+  });
+  return out;
+}
+function sanitizeResults(R) {
+  R = R && typeof R === "object" ? R : {};
+  const out = blankResults(), each = (o, f) => Object.keys(o && typeof o === "object" ? o : {}).forEach(k => { if (ID.test(k)) f(k, o[k]); });
+  each(R.order, (k, v) => { out.order[k] = (Array.isArray(v) ? v : []).filter(o => o && (o.t === "A" || o.t === "B")).map(o => ({ t: o.t, i: int(o.i, 0, 0, 30), tie: !!o.tie })); });
+  each(R.team, (k, v) => { if (["A", "B", "draw"].includes(v)) out.team[k] = v; });
+  each(R.duel, (k, v) => { if (v === "A" || v === "B") out.duel[k] = v; });
+  each(R.ev, (k, v) => { out.ev[k] = { A: [], B: [] }; TEAMS.forEach(t => (Array.isArray((v || {})[t]) ? v[t] : []).slice(0, 20).forEach((x, i) => { out.ev[k][t][i] = x == null || x === "" ? null : num(x, null); })); });
+  if (R.seats) out.seats = R.seats; if (R.names) out.names = R.names;
+  return out;
+}
+function sanitizeDoc(d) {
+  d = d && typeof d === "object" ? d : {};
+  const tm = d.timer || {}, rts = {};
+  Object.keys(d.rts && typeof d.rts === "object" ? d.rts : {}).forEach(k => { if (/^[a-z]+(\|[A-Za-z0-9_-]{1,40})+$/.test(k)) rts[k] = tnum(d.rts[k], 0); });
+  return { v: 2, config: sanitizeConfig(d.config), results: sanitizeResults(d.results), rts, cts: tnum(d.cts, 0), tts: tnum(d.tts, 0),
+    timer: { total: num(tm.total, 3600000, 60000, 36000000), end: tm.end == null ? null : tnum(tm.end, null), paused: tm.paused == null ? null : num(tm.paused, null, -36000000, 36000000), label: str(tm.label, 60) } };
+}
+doc = sanitizeDoc(doc);
+normalize();
 function normalize() {
   const c = doc.config;
-  c.teams = c.teams || blankConfig().teams;
-  c.roster = c.roster || { A: [], B: [] };
-  c.items = c.items || [];
-  c.phases = c.phases || [];
-  doc.results = Object.assign(blankResults(), doc.results || {});
   const R = doc.results;
   c.phases.forEach(ph => (ph.tables || []).forEach(tb => {
     tb.names = tb.names || { A: [], B: [] };
     /* 古い形式（名前を結果側に、順位を数字で持っていた）からの移しかえ */
-    if (R.names && R.names[tb.id]) { tb.names = R.names[tb.id]; }
+    if (R.names && R.names[tb.id]) { tb.names = { A: strs(R.names[tb.id].A, 40), B: strs(R.names[tb.id].B, 40) }; }
     if (R.seats && R.seats[tb.id] && !R.order[tb.id]) {
       const list = [];
       TEAMS.forEach(t => (R.seats[tb.id][t] || []).forEach((rk, i) => { if (rk != null) list.push({ t, i, rk }); }));
@@ -89,7 +141,6 @@ function normalize() {
     }
   }));
   delete R.names; delete R.seats;
-  doc.timer = Object.assign(blankTimer(), doc.timer || {});
   document.documentElement.style.setProperty("--ta", c.teams[0].color || "#c0392b");
   document.documentElement.style.setProperty("--tb", c.teams[1].color || "#1f3a5f");
 }
@@ -114,7 +165,7 @@ function indivRes(tb) {
     const same = ranked.filter(o => o.r === s.r).length;
     let sum = 0;
     for (let k = 0; k < same; k++) sum += pts[s.r - 1 + k] || 0;
-    const p = r1(sum / same);
+    const p = sum / same;
     out.seat[s.t + s.i] = p; out.pts[s.t] += p;
   });
   out.pts.A = r1(out.pts.A); out.pts.B = r1(out.pts.B);
@@ -172,7 +223,7 @@ function itemsOf(team) {
       list.push({ no: idx >= 0 ? idx + 1 : "？", name: idx >= 0 ? doc.config.items[idx].name : "（アイテム未設定）", from: tb.game || "デュエル卓" });
     }
   }));
-  return list.sort((a, b) => String(a.no).localeCompare(String(b.no)));
+  return list.sort((a, b) => (typeof a.no === "number" ? a.no : 999) - (typeof b.no === "number" ? b.no : 999));
 }
 
 /* ---------- 設定のチェック ---------- */
@@ -429,40 +480,75 @@ function setPath(path, val) {
 }
 function getPath(path) { return path.split(".").reduce((o, k) => o == null ? undefined : o[k], doc); }
 function parseVal(el) {
-  const v = el.value, t = el.dataset.type;
-  if (t === "num") return v === "" ? null : Number(v);
+  const t = el.dataset.type, v = ["num", "list", "pairs"].includes(t) ? el.value.normalize("NFKC") : el.value;
+  if (t === "num") return v.trim() === "" ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
   if (t === "list") return v.split(/[,\s、]+/).filter(Boolean).map(Number).filter(n => !isNaN(n));
   if (t === "pairs") return v.split(/[,、]+/).map(s => s.split(/[:：]/)).filter(p => p[0] !== undefined && p[0].trim() !== "").map(([a, b]) => { const n = Number(a); return [isNaN(n) ? 0 : n, el.dataset.bind.endsWith("options") ? (b || "").trim() : Number(b) || 0]; });
   if (t === "lines") return v.split(/\n/).map(s => s.trim()).filter(Boolean);
   return v;
 }
+/* 変更の時刻：設定（cts）・タイマー（tts）・結果は欄ごと（rts）。共有のときに欄ごとに新しい方を残す */
+function stamp() { const v = Math.max(Date.now(), maxSeen + 1); maxSeen = v; return v; }
+const markC = () => { doc.cts = stamp(); };
+const markT = () => { doc.tts = stamp(); };
+const markR = key => { doc.rts[key] = stamp(); };
+function rKeyOf(path) { const k = path.split("."); if (k[0] !== "results") return null; return k[1] === "ev" ? `ev|${k[2]}|${k[3]}|${k[4]}` : `${k[1]}|${k[2]}`; }
+function allRKeys(R) {
+  const ks = new Set(Object.keys(doc.rts));
+  Object.keys(R.order).forEach(id => ks.add("order|" + id)); Object.keys(R.team).forEach(id => ks.add("team|" + id)); Object.keys(R.duel).forEach(id => ks.add("duel|" + id));
+  Object.keys(R.ev).forEach(id => TEAMS.forEach(t => (R.ev[id][t] || []).forEach((_, k) => ks.add(`ev|${id}|${t}|${k}`))));
+  return [...ks];
+}
+const markAllR = before => { allRKeys(before || doc.results).forEach(markR); };
+/* 卓の人数・種類が変わったとき：いない席の順位を消し、配点は手で変えていなければ作り直す */
+function adjustTable(tb, old) {
+  if (tb.kind === "duel") tb.perTeam = 1;
+  if (tb.kind === "team" && old.kind !== "team") tb.perTeam = 2;
+  tb.perTeam = Math.max(1, Math.min(10, Math.round(Number(tb.perTeam) || 1)));
+  const n = tb.perTeam * 2, oldPreset = JSON.stringify(presetFor(old.perTeam * 2));
+  if (tb.kind === "indiv" && (tb.points || []).length !== n && (!(tb.points || []).length || JSON.stringify(tb.points) === oldPreset)) tb.points = presetFor(n);
+  if (tb.kind !== old.kind) { delete doc.results.order[tb.id]; delete doc.results.team[tb.id]; delete doc.results.duel[tb.id]; ["order", "team", "duel"].forEach(k => markR(k + "|" + tb.id)); }
+  else if (tb.perTeam < old.perTeam && doc.results.order[tb.id]) { doc.results.order[tb.id] = fixTies(doc.results.order[tb.id].filter(o => o.i < tb.perTeam)); markR("order|" + tb.id); }
+}
+const fixTies = ord => { if (ord[0]) ord[0].tie = false; return ord; };
 function onBind(el, final) {
   const path = el.dataset.bind, val = parseVal(el);
-  if (JSON.stringify(getPath(path)) === JSON.stringify(val)) return;
+  if (JSON.stringify(getPath(path)) === JSON.stringify(val)) { if (final) renderPanel(); return; }
+  const parent = path.split(".").slice(0, -1).join("."), old = el.dataset.re ? JSON.parse(JSON.stringify(getPath(parent))) : null;
   setPath(path, val);
+  const rk = rKeyOf(path);
+  if (rk) markR(rk); else markC();
   /* 先着：一方に点が入ったら、もう一方は0点 */
-  if (el.dataset.first && val > 0) { const [pid, k] = el.dataset.first.split("."); const t = path.split(".")[3]; setPath(`results.ev.${pid}.${other(t)}.${k}`, 0); }
-  /* 種類・人数が変わったら配点を作り直す */
-  if (el.dataset.re === "kind" || el.dataset.re === "per") {
-    const tb = getPath(path.split(".").slice(0, -1).join("."));
-    if (tb.kind === "duel") tb.perTeam = 1;
-    if (tb.kind === "team" && el.dataset.re === "kind") tb.perTeam = 2;
-    if (tb.kind === "indiv") tb.points = presetFor(tb.perTeam * 2);
-  }
+  if (el.dataset.first && val > 0) { const [pid, k] = el.dataset.first.split("."); const t = path.split(".")[3]; setPath(`results.ev.${pid}.${other(t)}.${k}`, 0); markR(`ev|${pid}|${other(t)}|${k}`); }
+  if (el.dataset.re === "kind" || el.dataset.re === "per") adjustTable(getPath(parent), old);
   if (el.dataset.re === "mode") {
-    const pt = getPath(path.split(".").slice(0, -1).join("."));
-    Object.assign(pt, { max: pt.max || doc.config.teamSize, per: pt.per ?? 1, tiers: pt.tiers || [[8, 5], [6, 3], [4, 1]], options: pt.options || [[10, "1位"]] });
+    const pt = getPath(parent), mx = pt.max || doc.config.teamSize;
+    Object.assign(pt, { max: mx, per: pt.per ?? 1, tiers: pt.tiers && pt.tiers.length ? pt.tiers : [[mx, 5], [Math.ceil(mx * .75), 3], [Math.ceil(mx * .5), 1]], options: pt.options && pt.options.length ? pt.options : [[10, "1位"]] });
   }
   changed(final || el.tagName === "SELECT" || !!el.dataset.re);
 }
+let localSeq = 0;
 function changed(rerender) {
-  doc.savedAt = stamp();
+  localSeq++;
   try { localStorage.setItem(LS_DOC, JSON.stringify(doc)); } catch (_) {}
   normalize(); renderBoard(); renderStage();
   if (rerender) renderPanel();
   pushSoon();
 }
-function stamp() { const v = Math.max(Date.now(), maxSeen + 1, (doc.savedAt || 0) + 1); maxSeen = v; return v; }
+/* 消す操作の前の状態を1つだけ取っておき、「元に戻す」で戻せるようにする */
+let snapDoc = null, undoTimer = null;
+function snapshot(msg) {
+  snapDoc = JSON.parse(JSON.stringify({ config: doc.config, results: doc.results }));
+  const u = $("undo"); $("undoMsg").textContent = msg; u.hidden = false;
+  clearTimeout(undoTimer); undoTimer = setTimeout(() => { u.hidden = true; snapDoc = null; }, 30000);
+}
+/* 危ない操作は2回押しで実行（1回目はボタンの文字が変わる） */
+function sure(b, label) {
+  if (b.dataset.sure) return true;
+  b.dataset.sure = "1"; const orig = b.textContent; b.textContent = label || "本当に実行する（もう一度押す）"; b.classList.add("danger");
+  setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = orig; } }, 4000);
+  return false;
+}
 
 document.addEventListener("change", e => { const el = e.target; if (el.dataset && el.dataset.bind) onBind(el, true); });
 document.addEventListener("input", e => { const el = e.target; if (el.dataset && el.dataset.bind && el.tagName !== "SELECT" && el.dataset.type !== "list" && el.dataset.type !== "pairs") onBind(el, false); });
@@ -482,36 +568,45 @@ document.addEventListener("click", async e => {
   const a = b.dataset.act; if (!a) return;
   const c = doc.config, i = Number(b.dataset.i), j = Number(b.dataset.j);
   switch (a) {
-    case "load-sample": doc.config = sampleConfig(); doc.results = blankResults(); changed(true); break;
-    case "new-blank": doc.config = blankConfig(); doc.results = blankResults(); changed(true); break;
-    case "add-item": c.items.push({ id: uid("i"), name: "アイテム" + (c.items.length + 1), desc: "" }); changed(true); break;
-    case "del-item": { const id = c.items[i].id; c.items.splice(i, 1); c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === id) tb.item = ""; })); changed(true); break; }
-    case "add-round": c.phases.push({ id: newPid(), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
-    case "add-event": c.phases.push({ id: newPid(), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
-    case "move": { const d = Number(b.dataset.d), k = i + d; if (k < 0 || k >= c.phases.length) break; [c.phases[i], c.phases[k]] = [c.phases[k], c.phases[i]]; changed(true); break; }
-    case "del-phase": c.phases.splice(i, 1); changed(true); break;
-    case "add-table": c.phases[i].tables.push(newTable(b.dataset.k, c.phases[i])); changed(true); break;
-    case "del-table": c.phases[i].tables.splice(j, 1); changed(true); break;
-    case "add-part": c.phases[i].parts.push({ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); changed(true); break;
-    case "del-part": c.phases[i].parts.splice(j, 1); changed(true); break;
+    case "load-sample": case "new-blank": {
+      if (!sure(b, a === "load-sample" ? "今の内容を消して見本を読み込む" : "今の内容を消して白紙にする")) break;
+      snapshot(a === "load-sample" ? "見本を読み込みました" : "白紙にしました");
+      const before = doc.results; doc.config = a === "load-sample" ? sampleConfig() : blankConfig(); doc.results = blankResults(); markC(); markAllR(before); changed(true); break;
+    }
+    case "undo": {
+      if (!snapDoc) break;
+      const before = doc.results; doc.config = sanitizeConfig(snapDoc.config); doc.results = sanitizeResults(snapDoc.results); markC(); markAllR(before); markAllR(doc.results);
+      snapDoc = null; $("undo").hidden = true; changed(true); flash("元に戻しました"); break;
+    }
+    case "add-item": c.items.push({ id: uid("i"), name: "アイテム" + (c.items.length + 1), desc: "" }); markC(); changed(true); break;
+    case "del-item": { if (!sure(b, "消す")) break; snapshot(`アイテム「${c.items[i].name}」を消しました`); const id = c.items[i].id; c.items.splice(i, 1); c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === id) tb.item = ""; })); markC(); changed(true); break; }
+    case "add-round": markC(); c.phases.push({ id: newPid(), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
+    case "add-event": markC(); c.phases.push({ id: newPid(), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
+    case "move": { const d = Number(b.dataset.d), k = i + d; if (k < 0 || k >= c.phases.length) break; [c.phases[i], c.phases[k]] = [c.phases[k], c.phases[i]]; markC(); changed(true); break; }
+    case "del-phase": if (!sure(b, "消す")) break; snapshot(`「${c.phases[i].name}」を消しました`); c.phases.splice(i, 1); markC(); changed(true); break;
+    case "add-table": c.phases[i].tables.push(newTable(b.dataset.k, c.phases[i])); markC(); changed(true); break;
+    case "del-table": if (!sure(b, "卓を消す")) break; snapshot(`「${c.phases[i].tables[j].game || "卓"}」を消しました`); c.phases[i].tables.splice(j, 1); markC(); changed(true); break;
+    case "add-part": c.phases[i].parts.push({ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); markC(); changed(true); break;
+    case "del-part": if (!sure(b, "消す")) break; snapshot(`「${c.phases[i].parts[j].name}」を消しました`); c.phases[i].parts.splice(j, 1); markC(); changed(true); break;
     case "phase": cur = c.phases[i].id; try { localStorage.setItem("vsteams-builder-cur", cur); } catch (_) {} renderPanel(); window.scrollTo({ top: 0 }); break;
     case "toggle-table": { const id = b.dataset.tb, tb = findTable(id); openT[id] = !(openT[id] || tableRes(tb).status !== "done"); renderPanel(); break; }
     case "pick": {
       const id = b.dataset.tb, t = b.dataset.t, k = Number(b.dataset.i), tb = findTable(id);
       const ord = doc.results.order[id] = doc.results.order[id] || [];
       const at = ord.findIndex(o => o.t === t && o.i === k);
-      if (at >= 0) { ord.splice(at, 1); if (ord[at]) ord[at].tie = ord[at].tie && at > 0; }
+      /* 消した人と同着だった次の人は、消した人の立場（前と同着かどうか）を引き継ぐ */
+      if (at >= 0) { const gone = ord.splice(at, 1)[0]; if (ord[at] && ord[at].tie) ord[at].tie = at > 0 && gone.tie; fixTies(ord); }
       else if (ord.length < tb.perTeam * 2) { ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 }); tieNext[id] = false; }
-      changed(true); break;
+      markR("order|" + id); changed(true); break;
     }
     case "tie": tieNext[b.dataset.tb] = !tieNext[b.dataset.tb]; renderPanel(); break;
-    case "undo-rank": { const ord = doc.results.order[b.dataset.tb] || []; ord.pop(); tieNext[b.dataset.tb] = false; changed(true); break; }
-    case "clear-rank": if (b.dataset.sure) { doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; changed(true); } else { b.dataset.sure = "1"; b.textContent = "本当にやり直す"; } break;
-    case "win": { const box = b.dataset.k === "team" ? doc.results.team : doc.results.duel, v = b.dataset.v; box[b.dataset.tb] = box[b.dataset.tb] === v ? undefined : v; changed(true); break; }
+    case "undo-rank": { const ord = doc.results.order[b.dataset.tb] || []; ord.pop(); tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break; }
+    case "clear-rank": if (!sure(b, "本当にやり直す")) break; doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break;
+    case "win": { const box = b.dataset.k === "team" ? doc.results.team : doc.results.duel, v = b.dataset.v; if (box[b.dataset.tb] === v) delete box[b.dataset.tb]; else box[b.dataset.tb] = v; markR(b.dataset.k + "|" + b.dataset.tb); changed(true); break; }
     case "num": {
       const { pt, t, k } = b.dataset, v = Number(b.dataset.v), path = `results.ev.${pt}.${t}.${k}`;
-      setPath(path, getPath(path) === v ? null : v);
-      if (b.dataset.first && v > 0 && getPath(path) === v) setPath(`results.ev.${pt}.${other(t)}.${k}`, 0);
+      setPath(path, getPath(path) === v ? null : v); markR(`ev|${pt}|${t}|${k}`);
+      if (b.dataset.first && v > 0 && getPath(path) === v) { setPath(`results.ev.${pt}.${other(t)}.${k}`, 0); markR(`ev|${pt}|${other(t)}|${k}`); }
       changed(true); break;
     }
     case "st-open": stageOn = true; renderStage(); tick(true); break;
@@ -534,13 +629,18 @@ document.addEventListener("click", async e => {
     }
     case "timer-reset": { const mi = $("tmMin"), la = $("tmLabel"); tset({ total: mi ? Math.max(1, Number(mi.value) || 1) * 60000 : doc.timer.total, label: la ? la.value : doc.timer.label, end: null, paused: null }); fl = {}; tick(true); break; }
     case "timer-sound": sound = !sound; if (sound) { unlockAudio(); beep(880, .15, 1); } tick(true); break;
-    case "sync-save": { const url = ($("syncUrl").value || "").trim(), id = ($("syncId").value || "").trim().replace(/[^\w-]/g, ""); if (!url || !id) { flash("URLと大会IDの両方を入れてください。"); break; } saveSync({ url, id }); renderPanel(); startSync(true); break; }
+    case "sync-save": { const url = ($("syncUrl").value || "").trim(), id = ($("syncId").value || "").trim().replace(/[^\w-]/g, ""); if (!url || !id) { flash("URLと大会IDの両方を入れてください。"); break; } if (!SYNC_URL_OK.test(url)) { flash("URLは https://script.google.com/ で始まるものを入れてください。"); break; } saveSync({ url, id }); joining = true; syncRev = null; renderPanel(); startSync(true); break; }
     case "sync-off": saveSync({}); stopSync(); renderPanel(); break;
     case "copy-share": try { await navigator.clipboard.writeText($("shareLink").value); flash("リンクをコピーしました"); } catch (_) { $("shareLink").select(); } break;
-    case "reset-results": if (b.dataset.sure) { doc.results = blankResults(); changed(true); } else { b.dataset.sure = "1"; b.textContent = "本当に消す（もう一度押す）"; } break;
+    case "reset-results": { if (!sure(b, "本当に消す（もう一度押す）")) break; snapshot("結果を消しました"); const before = doc.results; doc.results = blankResults(); markAllR(before); changed(true); break; }
     case "copy-data": try { await navigator.clipboard.writeText($("dataBox").value); flash("コピーしました"); } catch (_) { $("dataBox").select(); } break;
     case "import": case "import-config": {
-      try { const d = JSON.parse($("dataBox").value); if (!d.config || !Array.isArray(d.config.phases)) throw 0; doc.config = d.config; doc.results = a === "import" ? Object.assign(blankResults(), d.results || {}) : blankResults(); changed(true); flash("読み込みました"); }
+      try {
+        const d = JSON.parse($("dataBox").value); if (!d.config || !Array.isArray(d.config.phases)) throw 0;
+        if (!sure(b, "今の内容を置きかえて読み込む")) break;
+        snapshot("読み込みました"); const before = doc.results;
+        doc.config = sanitizeConfig(d.config); doc.results = a === "import" ? sanitizeResults(d.results) : blankResults(); markC(); markAllR(before); markAllR(doc.results); changed(true); flash("読み込みました");
+      }
       catch (_) { flash("読み込めませんでした。書き出した文字をそのまま貼ってください。"); }
       break;
     }
@@ -549,7 +649,7 @@ document.addEventListener("click", async e => {
 
 /* ---------- タイマー ---------- */
 let sound = false, fl = {}, prevRem = null, actx = null, alertTimer = null;
-function tset(p) { Object.assign(doc.timer, p); changed(false); }
+function tset(p) { Object.assign(doc.timer, p); markT(); changed(false); }
 const remOf = now => doc.timer.end != null ? doc.timer.end - now : (doc.timer.paused != null ? doc.timer.paused : doc.timer.total);
 const mmss = ms => { const neg = ms < 0; ms = Math.abs(ms); let s = Math.floor(ms / 1000); if (!neg && ms % 1000) s++; return (neg ? "+" : "") + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 function unlockAudio() { try { if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); } if (actx && actx.state === "suspended") actx.resume(); } catch (_) {} }
@@ -579,45 +679,81 @@ function tick() {
 }
 setInterval(tick, 250);
 
-/* ---------- 共有（Google Apps Script） ---------- */
+/* ---------- 共有（Google Apps Script） ----------
+ * 共有先には「版番号（rev）」つきで大会データを1つ置く。
+ * 送るときは、最後に読んだ版番号を添える。ほかの端末が先に保存していたら（版が違ったら）断られるので、
+ * 共有先の内容と手元の内容を欄ごとに比べて新しい方を残し（mergeDocs）、もう一度送る。
+ */
 function syncConf() { try { return JSON.parse(localStorage.getItem(LS_SYNC) || "{}"); } catch (_) { return {}; } }
 function saveSync(s) { try { localStorage.setItem(LS_SYNC, JSON.stringify(s)); } catch (_) {} }
-let pollTimer = null, pushTimer = null, pushing = false, lastPushed = 0;
+let pollTimer = null, pushTimer = null, pushing = false, syncRev = null, joining = false, pendingRender = false;
 function syncStat(t, bad) { const el = $("syncStat"); el.textContent = t; el.style.color = bad ? "#ff9b90" : ""; }
-function stopSync() { clearInterval(pollTimer); pollTimer = null; syncStat("この端末に保存"); }
+function stopSync() { clearInterval(pollTimer); pollTimer = null; syncRev = null; syncStat("この端末に保存"); }
+const rGet = (R, key) => { const k = key.split("|"); if (k[0] === "ev") return ((R.ev[k[1]] || {})[k[2]] || [])[Number(k[3])]; return (R[k[0]] || {})[k[1]]; };
+function rSet(R, key, v) {
+  const k = key.split("|");
+  if (k[0] === "ev") { R.ev[k[1]] = R.ev[k[1]] || { A: [], B: [] }; R.ev[k[1]][k[2]] = R.ev[k[1]][k[2]] || []; R.ev[k[1]][k[2]][Number(k[3])] = v == null ? null : v; return; }
+  if (!R[k[0]]) return;
+  if (v === undefined) delete R[k[0]][k[1]]; else R[k[0]][k[1]] = JSON.parse(JSON.stringify(v));
+}
+/* 欄ごとに新しい方を残す。設定・タイマーはまとめて新しい方 */
+function mergeDocs(local, remote) {
+  const out = JSON.parse(JSON.stringify(local));
+  if (remote.cts > local.cts) { out.config = remote.config; out.cts = remote.cts; }
+  if (remote.tts > local.tts) { out.timer = remote.timer; out.tts = remote.tts; }
+  Object.keys(remote.rts).forEach(k => { if (remote.rts[k] > (local.rts[k] || 0)) { rSet(out.results, k, rGet(remote.results, k)); out.rts[k] = remote.rts[k]; } });
+  return out;
+}
+const hasNewer = (a, b) => a.cts > b.cts || a.tts > b.tts || Object.keys(a.rts).some(k => a.rts[k] > (b.rts[k] || 0));
+const seenTimes = d => { maxSeen = Math.max(maxSeen, d.cts, d.tts, ...Object.values(d.rts), 0); };
+const typing = () => { const a = document.activeElement; return !!(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA") && a.dataset.bind); };
+function adopt(next) {
+  doc = next; normalize();
+  try { localStorage.setItem(LS_DOC, JSON.stringify(doc)); } catch (_) {}
+  renderBoard(); renderStage();
+  if (typing()) pendingRender = true; else { renderTabs(); renderPanel(); }
+}
+document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender && !typing()) { pendingRender = false; renderPanel(); } }, 0));
 async function pull() {
   const s = syncConf(); if (!s.url || !s.id) return;
   try {
     const r = await fetch(`${s.url}?id=${encodeURIComponent(s.id)}&t=${Date.now()}`);
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || "error");
-    if (j.doc) {
-      const d = typeof j.doc === "string" ? JSON.parse(j.doc) : j.doc;
-      if ((d.savedAt || 0) > maxSeen) maxSeen = d.savedAt;
-      if ((d.savedAt || 0) > (doc.savedAt || 0)) {
-        const a = document.activeElement, typing = a && a.tagName === "INPUT" && a.dataset.bind;
-        if (!typing) { doc = d; try { localStorage.setItem(LS_DOC, JSON.stringify(doc)); } catch (_) {} renderAll(); }
-      } else if ((doc.savedAt || 0) > (d.savedAt || 0) && doc.savedAt !== lastPushed) pushSoon();
-    } else if (doc.savedAt) pushSoon();
+    if (!j.doc) { joining = false; syncRev = j.rev || 0; pushSoon(); syncStat(`共有中（${s.id}）`); return; }
+    if (j.rev === syncRev && !joining) { syncStat(`共有中（${s.id}）`); return; }
+    const remote = sanitizeDoc(typeof j.doc === "string" ? JSON.parse(j.doc) : j.doc);
+    seenTimes(remote);
+    syncRev = j.rev;
+    if (joining) { joining = false; adopt(remote); flash("共有中の大会を読み込みました"); }
+    else { const merged = mergeDocs(doc, remote); adopt(merged); if (hasNewer(merged, remote)) pushSoon(); }
     syncStat(`共有中（${s.id}）`);
   } catch (err) { syncStat("共有先につながりません", true); }
 }
-function pushSoon() { if (!syncConf().url) return; clearTimeout(pushTimer); pushTimer = setTimeout(push, 500); }
-async function push() {
-  const s = syncConf(); if (!s.url || !s.id) return;
+function pushSoon() { if (!syncConf().url) return; clearTimeout(pushTimer); pushTimer = setTimeout(push, 400); }
+async function push(tries = 0) {
+  const s = syncConf(); if (!s.url || !s.id || joining) return;
   if (pushing) { pushSoon(); return; }
-  pushing = true; const sent = doc.savedAt;
+  pushing = true; const seq = localSeq;
   try {
-    const r = await fetch(s.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ id: s.id, savedAt: sent, doc: JSON.stringify(doc) }) });
-    const j = await r.json(); if (!j.ok) throw new Error(j.error || "error");
-    lastPushed = sent; syncStat(`共有中（${s.id}）`);
+    const r = await fetch(s.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ id: s.id, base: syncRev, doc: JSON.stringify(doc) }) });
+    const j = await r.json();
+    if (j.conflict) {
+      /* ほかの端末が先に保存していた：混ぜてから送り直す */
+      const remote = sanitizeDoc(typeof j.doc === "string" ? JSON.parse(j.doc) : j.doc);
+      seenTimes(remote); syncRev = j.rev; adopt(mergeDocs(doc, remote));
+      pushing = false; if (tries < 5) return push(tries + 1); throw new Error("busy");
+    }
+    if (!j.ok) throw new Error(j.error || "error");
+    syncRev = j.rev; syncStat(`共有中（${s.id}）`);
+    if (localSeq !== seq) pushSoon();
   } catch (_) { syncStat("保存できませんでした（もう一度送ります）", true); setTimeout(pushSoon, 3000); }
   pushing = false;
 }
 function startSync(first) { const s = syncConf(); if (!s.url || !s.id) return; clearInterval(pollTimer); pollTimer = setInterval(() => { if (document.visibilityState === "visible") pull(); }, 3000); if (first) pull(); }
 
 /* 共有リンク（?e=大会ID&s=URL）で開いたとき */
-(() => { const q = new URLSearchParams(location.search), id = q.get("e"), url = q.get("s"); if (id && url) { saveSync({ id, url }); doc.savedAt = 0; history.replaceState(null, "", location.pathname); } })();
+(() => { const q = new URLSearchParams(location.search), id = (q.get("e") || "").replace(/[^\w-]/g, ""), url = q.get("s") || ""; if (id && SYNC_URL_OK.test(url)) { saveSync({ id, url }); joining = true; history.replaceState(null, "", location.pathname); } })();
 
 renderAll();
 startSync(true);
