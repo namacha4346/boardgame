@@ -345,7 +345,7 @@ function renderPlay() {
     h += `<div class="grid">${[...left, ...tbs.filter(tb => !left.includes(tb))].map(tableCard).join("")}</div>`;
   } else {
     const er = eventRes(ph);
-    h += `<div class="grid">${(ph.parts || []).map(pt => partCard(pt, er)).join("")}</div>`;
+    h += `<div class="grid one">${(ph.parts || []).map(pt => partCard(pt, er)).join("")}</div>`;
   }
   h += `<div class="row between">${pi > 0 ? `<button type="button" data-act="phase" data-i="${pi - 1}">← ${esc(c.phases[pi - 1].name)}</button>` : "<span></span>"}${pi < c.phases.length - 1 ? `<button type="button" class="primary" data-act="phase" data-i="${pi + 1}">${esc(c.phases[pi + 1].name)} →</button>` : ""}</div>`;
   return h;
