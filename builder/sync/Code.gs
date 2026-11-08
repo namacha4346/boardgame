@@ -31,9 +31,13 @@ function findRow_(sh, id) {
   return 0;
 }
 
+// セルに入れるときは、それぞれの先頭に「|」を付ける。
+// 区切った途中が「=」や「'」で始まると、数式や文字の印として扱われて中身が変わってしまうため。
 function read_(sh, row) {
   var vals = sh.getRange(row, 1, 1, Math.max(3, sh.getLastColumn())).getValues()[0];
-  return { rev: Number(vals[1]) || 0, doc: vals.slice(2).join('') };
+  var parts = vals.slice(2).map(String);
+  var marked = parts.length && parts[0].charAt(0) === '|';
+  return { rev: Number(vals[1]) || 0, doc: parts.map(function (p) { return marked && p.charAt(0) === '|' ? p.slice(1) : p; }).join('') };
 }
 
 function json_(obj) {
@@ -74,8 +78,8 @@ function doPost(e) {
       row = sh.getLastRow() + 1;
     }
     var parts = [];
-    for (var i = 0; i < doc.length; i += CHUNK) parts.push(doc.slice(i, i + CHUNK));
-    if (!parts.length) parts.push('');
+    for (var i = 0; i < doc.length; i += CHUNK) parts.push('|' + doc.slice(i, i + CHUNK));
+    if (!parts.length) parts.push('|');
     sh.getRange(row, 1, 1, 2 + parts.length).setValues([[id, rev + 1].concat(parts)]);
     return json_({ ok: true, rev: rev + 1 });
   } catch (err) {

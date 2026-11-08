@@ -144,19 +144,34 @@ details.pd>.card{border:0;border-radius:0 0 14px 14px}
 .st-vs{font-family:var(--display);color:#c9a24a;font-size:clamp(22px,4vw,60px);text-align:center}
 .st-lead{font-size:clamp(12px,1.4vw,20px);color:#c9c6bd;text-align:center}
 .st-break{display:grid;gap:.5vh;max-width:1200px;width:100%;margin:0 auto}
-.st-row{display:grid;grid-template-columns:4em 1fr minmax(8em,16em) 1fr 4em;gap:1vw;align-items:center;font-size:clamp(11px,min(1.4vw,2.2vh),20px)}
+.st-row{display:grid;grid-template-columns:4em 1fr minmax(8em,16em) 1fr 4em;gap:1vw;align-items:center;font-size:clamp(12px,min(1.8vw,3vh),28px)}
 .st-row .v{font-family:var(--display);font-variant-numeric:tabular-nums}
 .st-row .va{text-align:right}
 .st-row .lab{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sbar{height:.7em;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;display:flex}
 .sbar.a{justify-content:flex-end}.sbar i{display:block;height:100%;border-radius:999px}
-.st-ctrl{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;opacity:.6;position:sticky;bottom:0}
+.st-ctrl{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;opacity:.6;position:sticky;bottom:0;transition:opacity .4s}
 .st-ctrl:hover,.st-ctrl:focus-within{opacity:1}
 .st-ctrl button{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#f4efe2}
 #stage.no-timer .st-timer{display:none}
 .alert{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;background:#b4432f;color:#fff;font-weight:700;padding:12px 20px;border-radius:12px;max-width:92vw;text-align:center}
 @media (max-width:640px){.st-row{grid-template-columns:3em 1fr 6em 1fr 3em}}
 body.stage-open .undo{display:none!important}
+/* 「元に戻す」の帯が出ているときは、お知らせをその上に出す */
+.undo:not([hidden]) ~ .alert{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+/* 押しやすさ：タブ・ROUND・数字のボタンは44px以上 */
+nav.tabs button,.pills button{min-height:44px}
+.num{min-width:44px;min-height:44px}
+/* スマホで入力欄が横にはみ出さないように */
+.card input:not([type=color]):not([type=number]),.card select{max-width:100%}
+.card .row>.field{max-width:100%}
+.row>.row{min-width:0;max-width:100%}.row>input{flex:1 1 8em;min-width:0}
+button:disabled{opacity:.45;cursor:not-allowed}
+/* 発表画面：最終結果は大きく。操作ボタンは、マウスを動かさないと消える */
+.st-win{font-family:var(--display);font-size:clamp(22px,min(4vw,7vh),64px);color:#f0cf7a;text-align:center;line-height:1.2;text-shadow:0 0 24px rgba(240,207,122,.35)}
+#stage.idle .st-ctrl{opacity:0;pointer-events:none}
+#stage.idle{cursor:none}
+.st-break{flex:1;align-content:center}
 .undo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:41;background:var(--navy);color:#fff;padding:10px 12px 10px 18px;border-radius:12px;display:flex;gap:14px;align-items:center;max-width:92vw;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .undo button{background:#c9a24a;border-color:#c9a24a;color:#141b33;font-weight:700}
 </style>
@@ -183,6 +198,7 @@ body.stage-open .undo{display:none!important}
     <div><div class="st-vs">VS</div><div class="st-lead" id="stLead"></div></div>
     <div class="st-team" id="stB"><span class="st-name" id="stNB"></span><span class="st-score" id="stSB">0</span><span class="st-items" id="stIB"></span></div>
   </div>
+  <div class="st-win" id="stWin" hidden></div>
   <div class="st-break" id="stBreak"></div>
   <div class="st-ctrl">
     <button type="button" data-act="timer-go" class="tgo">スタート</button>
@@ -192,8 +208,8 @@ body.stage-open .undo{display:none!important}
     <button type="button" data-act="st-close">入力画面に戻る</button>
   </div>
 </div>
-<div class="alert" id="alert" hidden></div>
 <div class="undo" id="undo" hidden role="status"><span id="undoMsg"></span><button type="button" data-act="undo">元に戻す</button></div>
+<div class="alert" id="alert" hidden role="status" aria-live="polite"></div>
 
 <script src="app.js"></script>
 </body>
