@@ -14,7 +14,9 @@ const other = t => t === "A" ? "B" : "A";
 const r1 = n => Math.round(n * 10) / 10;
 const fmt = n => (Math.round(n * 10) / 10).toString();
 /* 共有先として受け付けるURL（Apps Script。動作確認用に localhost も可） */
-const SYNC_URL_OK = /^(https:\/\/script\.google\.com\/|http:\/\/localhost[:\/])/;
+function okSyncUrl(u) {
+  try { const x = new URL(u); if (x.username || x.password) return false; return (x.protocol === "https:" && x.hostname === "script.google.com") || (x.protocol === "http:" && x.hostname === "localhost"); } catch (_) { return false; }
+}
 const LS_DOC = "vsteams-builder-doc", LS_SYNC = "vsteams-builder-sync", LS_TAB = "vsteams-builder-tab";
 
 /* 卓の人数ごとの標準配点（個人戦） */
@@ -67,17 +69,21 @@ try { tab = localStorage.getItem(LS_TAB) || "play"; } catch (_) {}
 if (!["play", "sum", "setup", "data"].includes(tab)) tab = "play";
 let stageOn = false, stHidden = false, stTimer = true, maxSeen = 0;
 /* 発表画面の状態（開いているか・点数を伏せているか・タイマーを出すか）は端末ごとに覚えておく */
-try { const st = JSON.parse(localStorage.getItem("vsteams-builder-stage") || "{}"); stageOn = !!st.on; stHidden = !!st.hidden; stTimer = st.timer !== false; } catch (_) {}
-function saveStage() { try { localStorage.setItem("vsteams-builder-stage", JSON.stringify({ on: stageOn, hidden: stHidden, timer: stTimer })); } catch (_) {} }
+/* 開いているかどうかはこのタブだけ（再読み込みでは残るが、別のタブ・あとで開いたときは閉じた状態） */
+try { const st = JSON.parse(localStorage.getItem("vsteams-builder-stage") || "{}"); stHidden = !!st.hidden; stTimer = st.timer !== false; stageOn = sessionStorage.getItem("vsteams-builder-stage-on") === "1"; } catch (_) {}
+function saveStage() { try { localStorage.setItem("vsteams-builder-stage", JSON.stringify({ hidden: stHidden, timer: stTimer })); sessionStorage.setItem("vsteams-builder-stage-on", stageOn ? "1" : "0"); } catch (_) {} }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && stageOn && !document.fullscreenElement) { stageOn = false; saveStage(); renderStage(); } });
 /* 当日画面：表示中の種目、開いている卓、同着の入力待ち */
 let cur = null, openT = {}, tieNext = {}, openP = {}, absentMode = {};
 try { cur = localStorage.getItem("vsteams-builder-cur"); } catch (_) {}
 
 /* 読み込んだデータ・共有のデータは信用せず、形と値をそろえる（画面に入れる値を安全にする） */
-const ID = /^[A-Za-z0-9_-]{1,40}$/, COLOR = /^#[0-9a-fA-F]{6}$/;
-const okId = (v, p) => typeof v === "string" && ID.test(v) ? v : uid(p);
-const num = (v, d, lo = -1e6, hi = 1e6) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const ID_RE = /^[A-Za-z0-9_-]{1,40}$/, COLOR = /^#[0-9a-fA-F]{6}$/;
+/* "__proto__" などは、オブジェクトの仕組みを書き換えられてしまうのでIDとして認めない */
+const BAD_KEYS = new Set(["__proto__", "constructor", "prototype", "hasOwnProperty", "toString", "valueOf"]);
+const ID = { test: k => typeof k === "string" && ID_RE.test(k) && !BAD_KEYS.has(k) };
+const okId = (v, p) => ID.test(v) ? v : uid(p);
+const num = (v, d, lo = -1e6, hi = 1e6) => { if (v == null || v === "") return d; const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const int = (v, d, lo, hi) => Math.round(num(v, d, lo, hi));
 const tnum = (v, d) => num(v, d, 0, Number.MAX_SAFE_INTEGER); /* 時刻（ミリ秒） */
 const str = (v, max = 200) => (v == null ? "" : String(v)).slice(0, max);
@@ -118,7 +124,7 @@ function sanitizeResults(R) {
   each(R.team, (k, v) => { if (["A", "B", "draw"].includes(v)) out.team[k] = v; });
   each(R.duel, (k, v) => { if (v === "A" || v === "B") out.duel[k] = v; });
   each(R.absent, (k, v) => { out.absent[k] = (Array.isArray(v) ? v : []).filter(o => o && (o.t === "A" || o.t === "B")).slice(0, 4).map(o => ({ t: o.t, i: int(o.i, 0, 0, 30) })); });
-  each(R.used, (k, v) => { if (v === true) out.used[k] = true; });
+  each(R.used, (k, v) => { if (v === "A" || v === "B") out.used[k] = v; });
   each(R.ev, (k, v) => { out.ev[k] = { A: [], B: [] }; TEAMS.forEach(t => (Array.isArray((v || {})[t]) ? v[t] : []).slice(0, 20).forEach((x, i) => { out.ev[k][t][i] = x == null || x === "" ? null : num(x, null); })); });
   if (R.seats) out.seats = R.seats; if (R.names) out.names = R.names;
   return out;
@@ -126,7 +132,7 @@ function sanitizeResults(R) {
 function sanitizeDoc(d) {
   d = d && typeof d === "object" ? d : {};
   const tm = d.timer || {}, rts = {};
-  Object.keys(d.rts && typeof d.rts === "object" ? d.rts : {}).forEach(k => { if (/^[a-z]+(\|[A-Za-z0-9_-]{1,40})+$/.test(k)) rts[k] = tnum(d.rts[k], 0); });
+  Object.keys(d.rts && typeof d.rts === "object" ? d.rts : {}).forEach(k => { if (/^[a-z]+(\|[A-Za-z0-9_-]{1,40})+$/.test(k) && !k.split("|").some(x => BAD_KEYS.has(x))) rts[k] = tnum(d.rts[k], 0); });
   return { v: 2, config: sanitizeConfig(d.config), results: sanitizeResults(d.results), rts, cts: tnum(d.cts, 0), tts: tnum(d.tts, 0),
     timer: { total: num(tm.total, 3600000, 60000, 36000000), end: tm.end == null ? null : tnum(tm.end, null), paused: tm.paused == null ? null : num(tm.paused, null, -36000000, 36000000), label: str(tm.label, 60) } };
 }
@@ -237,7 +243,7 @@ function itemsOf(team) {
   doc.config.phases.forEach(ph => (ph.tables || []).forEach(tb => {
     if (tb.kind === "duel" && doc.results.duel[tb.id] === team) {
       const idx = doc.config.items.findIndex(i => i.id === tb.item);
-      list.push({ no: idx >= 0 ? idx + 1 : "？", name: idx >= 0 ? doc.config.items[idx].name : "（アイテム未設定）", from: tb.game || "デュエル卓", key: tb.id, used: !!doc.results.used[tb.id] });
+      list.push({ no: idx >= 0 ? idx + 1 : "？", name: idx >= 0 ? doc.config.items[idx].name : "（アイテム未設定）", from: tb.game || "デュエル卓", key: tb.id, used: doc.results.used[tb.id] === team });
     }
   }));
   return list.sort((a, b) => (typeof a.no === "number" ? a.no : 999) - (typeof b.no === "number" ? b.no : 999));
@@ -257,6 +263,15 @@ function problems() {
       if (tb.kind === "duel" && !tb.item && c.items.length) out.push(`${ph.name}「${tb.game || "卓"}」：勝ったチームがもらうアイテムを選んでください。`);
     });
   });
+  /* 種目の設定で、届かない値になっていないか */
+  c.phases.forEach(ph => (ph.parts || []).forEach(pt => {
+    const where = `${ph.name}「${pt.name}」`;
+    if (pt.mode === "count" && pt.max > c.teamSize) out.push(`${where}：最大の人数（${pt.max}）が1チームの人数（${c.teamSize}）より多くなっています。`);
+    if (pt.mode === "count" && pt.bonusAt && pt.bonusAt > pt.max) out.push(`${where}：ボーナスの条件（${pt.bonusAt}人以上）が最大の人数（${pt.max}）を超えていて、届きません。`);
+    if (pt.mode === "tier" && (pt.tiers || []).some(x => x[0] > pt.max)) out.push(`${where}：段階の値が最大の値（${pt.max}）を超えていて、届かない段階があります。`);
+    if (pt.mode === "tier" && !(pt.tiers || []).length) out.push(`${where}：段階が入っていません。`);
+    if (pt.mode === "first" && !(pt.options || []).length) out.push(`${where}：選択肢が入っていません。`);
+  }));
   return out;
 }
 
@@ -369,14 +384,16 @@ function tableCard(tb) {
   if (tb.kind === "indiv") {
     const rm = rankMap(tb), ord = doc.results.order[tb.id] || [], abs = absentOf(tb), total = tb.perTeam * 2, n = ord.length, cap = total - abs.length, am = !!absentMode[tb.id];
     const isAbs = (t, i) => abs.some(a => a.t === t && a.i === i);
+    /* 欠席の席のすぐ次の順位は、前の人と同着にできない（間に欠席の席が入るため） */
+    const noTie = abs.length && n === total - 1 - abs.length;
     const guide = am ? "<b>欠席の人</b>を押してください（もう一度押すと取り消し）" : n >= cap ? "全員の順位が入りました。" : `<b>${nextRank(tb)}位</b>の人を押してください${tieNext[tb.id] ? "（前の人と同着）" : ""}`;
     h += `<p class="guide">${guide}</p><div class="seatgrid">`;
     TEAMS.forEach(t => { for (let i = 0; i < tb.perTeam; i++) {
       const rk = rm[t][i], ab = isAbs(t, i);
       h += `<button type="button" class="seat ${t === "A" ? "sa" : "sb"}${rk ? " ranked" : ""}${ab ? " absent" : ""}" data-act="pick" data-tb="${tb.id}" data-t="${t}" data-i="${i}"><span class="rk">${ab ? "欠席" + (rk ? `（${rk}位扱い）` : "") : rk ? rk + "位" : ""}</span><span class="nm">${esc(nameOf(tb, t, i))}</span><span class="pt">${rk ? fmt(r.seat[t + i]) + "点" : ""}</span></button>`;
     } });
-    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id]}" ${n === 0 || n >= cap || am ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n && !am ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button><button type="button" data-act="absent-mode" data-tb="${tb.id}" aria-pressed="${am}">${am ? "欠席を選び終わる" : "欠席がいる"}</button></div>
-      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。欠席の席は、下から2番目の順位にいたものとして数えます。</p>`;
+    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id] && !noTie}" ${n === 0 || n >= cap || am || noTie ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n && !am ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button>${tb.perTeam > 1 ? `<button type="button" data-act="absent-mode" data-tb="${tb.id}" aria-pressed="${am}">${am ? "欠席を選び終わる" : "欠席がいる"}</button>` : ""}</div>
+      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。${tb.perTeam > 1 ? "欠席の席は、下から2番目の順位にいたものとして数えます。" : ""}</p>`;
   } else {
     const cur2 = tb.kind === "team" ? doc.results.team[tb.id] : doc.results.duel[tb.id];
     const opts = [["A", tn("A") + " の勝ち", "sa"], ["B", tn("B") + " の勝ち", "sb"]];
@@ -421,8 +438,8 @@ function renderPlay() {
     <div class="row between"><h2>${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h2><div class="row">${chip(pr.status)}<b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b><button type="button" data-act="st-open">発表画面</button></div></div>
     ${timerBar(ph)}`;
   if (ph.type === "round") {
-    const tbs = ph.tables || [], left = tbs.filter(tb => tableRes(tb).status !== "done");
-    h += `<div class="grid">${[...left, ...tbs.filter(tb => !left.includes(tb))].map(tableCard).join("")}</div>`;
+    const tbs = ph.tables || [];
+    h += `<div class="grid">${tbs.map(tableCard).join("")}</div>`;
   } else {
     const er = eventRes(ph);
     h += `<div class="grid one">${(ph.parts || []).map(pt => partCard(pt, er)).join("")}</div>`;
@@ -444,16 +461,23 @@ function renderSum() {
 /* ---------- 画面：データ・共有 ---------- */
 function renderData() {
   const s = syncConf();
-  const share = s.url && s.id ? `${location.origin}${location.pathname}?e=${encodeURIComponent(s.id)}&s=${encodeURIComponent(s.url)}` : "";
-  return `<h2>データ・共有</h2>
+  const base = s.url && s.id ? `${location.origin}${location.pathname}?e=${encodeURIComponent(s.id)}&s=${encodeURIComponent(s.url)}` : "";
+  const share = base && s.key ? base + "&k=" + encodeURIComponent(s.key) : base;
+  let hasBackup = false; try { hasBackup = !!localStorage.getItem("vsteams-builder-backup"); } catch (_) {}
+  const pj = pendingJoin ? `<article class="card welcome"><h3>共有中の大会に参加しますか？</h3><p style="margin:0">リンクの大会ID「<b>${esc(pendingJoin.id)}</b>」に参加します。この端末の今の内容は、共有中の大会の内容に置きかわります（今の内容は控えとして残します）。${pendingJoin.key ? "" : "<br>合言葉がないリンクなので、見るだけになります（入力は保存されません）。"}</p>
+    <div class="row"><button type="button" class="primary" data-act="join-yes">参加する</button><button type="button" data-act="join-no">参加しない</button></div></article>` : "";
+  return `<h2>データ・共有</h2>${pj}
   <article class="card"><h3>複数の端末で共有する</h3>
     <p class="hint" style="margin:0">Googleスプレッドシートに置いた共有用の仕組み（Apps Script）のURLを入れると、スマホで入れた結果がパソコンの発表画面にも出ます。作り方は README を見てください。</p>
     <label class="field"><span class="lbl">Apps Script のURL（…/exec）</span><input id="syncUrl" value="${esc(s.url || "")}" placeholder="https://script.google.com/macros/s/…/exec" style="width:100%"></label>
     <label class="field"><span class="lbl">大会ID（同じIDの端末同士で共有。英数字）</span><input id="syncId" value="${esc(s.id || "")}" placeholder="例：bansishi-2026"></label>
+    <label class="field"><span class="lbl">合言葉（Code.gs の WRITE_KEY と同じもの。空なら見るだけ）</span><input id="syncKey" value="${esc(s.key || "")}" autocomplete="off"></label>
     <div class="row"><button type="button" class="primary" data-act="sync-save">共有を始める</button><button type="button" data-act="sync-off">共有をやめる</button></div>
-    ${share ? `<label class="field"><span class="lbl">ほかの端末で開くリンク</span><input readonly value="${esc(share)}" style="width:100%" id="shareLink"></label><div><button type="button" class="small" data-act="copy-share">リンクをコピー</button></div>` : ""}
+    ${share ? `<label class="field"><span class="lbl">運営スタッフ用リンク（入力できる。参加者には渡さない）</span><input readonly value="${esc(share)}" style="width:100%" id="shareLink"></label><div><button type="button" class="small" data-act="copy-share">リンクをコピー</button></div>` : ""}
+    ${base && s.key ? `<label class="field"><span class="lbl">見るだけのリンク（合言葉なし。発表用のパソコンなど）</span><input readonly value="${esc(base)}" style="width:100%"></label>` : ""}
+    ${hasBackup ? `<div><button type="button" class="small" data-act="restore-backup">共有に参加する前の内容を出す</button></div>` : ""}
   </article>
-  <article class="card"><h3>結果だけを消す</h3><p class="hint" style="margin:0">設定（チーム・卓・種目）は残して、順位や点数の入力だけを消します。元に戻せません。</p><div><button type="button" class="danger" data-act="reset-results">結果を消す</button></div></article>
+  <article class="card"><h3>結果だけを消す</h3><p class="hint" style="margin:0">設定（チーム・卓・種目）は残して、順位や点数の入力だけを消します。消した直後なら、画面下の「元に戻す」で戻せます。</p><div><button type="button" class="danger" data-act="reset-results">結果を消す</button></div></article>
   <article class="card"><h3>書き出し・読み込み</h3><p class="hint" style="margin:0">設定と結果をまとめた文字です。コピーして保存しておけば、同じ大会の設定を次回も使えます。</p>
     <textarea id="dataBox">${esc(JSON.stringify({ config: doc.config, results: doc.results }, null, 1))}</textarea>
     <div class="row"><button type="button" data-act="copy-data">コピー</button><button type="button" data-act="import">上の内容を読み込む</button><button type="button" data-act="import-config">設定だけ読み込む（結果は空）</button></div></article>`;
@@ -471,15 +495,17 @@ function renderBoard() {
 }
 function renderTabs() { $("tabs").innerHTML = TABS.map(([k, l]) => `<button type="button" data-tab="${k}" aria-pressed="${k === tab}">${l}</button>`).join(""); }
 function renderPanel() {
-  const a = document.activeElement, keep = a && a.dataset && a.dataset.bind;
+  const a = document.activeElement, keep = a && a.dataset && a.dataset.bind, keepId = a && a.id && $("panel").contains(a) ? a.id : null;
+  const y = window.scrollY;
   $("panel").innerHTML = tab === "setup" ? renderSetup() : tab === "play" ? renderPlay() : tab === "sum" ? renderSum() : renderData();
-  if (keep) { const el = document.querySelector(`[data-bind="${CSS.escape(keep)}"]`); if (el && el.tagName === "INPUT") { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } }
+  const el = keep ? document.querySelector(`[data-bind="${CSS.escape(keep)}"]`) : keepId ? $(keepId) : null;
+  if (el) { el.focus({ preventScroll: true }); if (el.tagName === "INPUT" && el.type !== "color") { try { el.setSelectionRange(el.value.length, el.value.length); } catch (_) {} } window.scrollTo({ top: y }); }
   tick(true);
 }
 /* 発表画面は暗い背景なので、チームの色を明るくして使う */
 const light = c => `color-mix(in srgb, ${c} 55%, #ffffff)`;
 function renderStage() {
-  const st = $("stage"); st.hidden = !stageOn; document.body.style.overflow = stageOn ? "hidden" : "";
+  const st = $("stage"); st.hidden = !stageOn; document.body.style.overflow = stageOn ? "hidden" : ""; document.body.classList.toggle("stage-open", stageOn);
   if (!stageOn) return;
   const t = totals(), phases = doc.config.phases, res = phases.map(phaseRes), all = res.length && res.every(r => r.status === "done");
   $("stTitle").textContent = doc.config.name || "VS TEAMS";
@@ -487,10 +513,11 @@ function renderStage() {
   $("stNA").innerHTML = tn("A"); $("stNB").innerHTML = tn("B");
   $("stNA").style.color = light(doc.config.teams[0].color); $("stNB").style.color = light(doc.config.teams[1].color);
   $("stSA").textContent = stHidden ? "?" : fmt(t.A); $("stSB").textContent = stHidden ? "?" : fmt(t.B);
-  $("stLead").textContent = stHidden ? "" : t.A === t.B ? "同点" : `${fmt(Math.abs(t.A - t.B))}点差`;
+  const leader = t.A > t.B ? doc.config.teams[0].name : doc.config.teams[1].name;
+  $("stLead").textContent = stHidden ? "" : t.A === t.B ? "同点" : all ? `${leader} の優勝！（${fmt(Math.abs(t.A - t.B))}点差）` : `${leader} が ${fmt(Math.abs(t.A - t.B))}点リード`;
   ["A", "B"].forEach(tm => { const l = itemsOf(tm); $("stI" + tm).innerHTML = l.length ? l.map(x => `<span class="ib${x.used ? " used" : ""}">${x.no}</span>`).join("") + `<span>アイテム 残り${l.filter(x => !x.used).length}個</span>` : ""; });
   $("stBreak").innerHTML = phases.map((ph, i) => { const r = res[i], m = Math.max(r.pts.A, r.pts.B, 1), h = stHidden;
-    return `<div class="st-row"><span class="v va" style="color:${light(doc.config.teams[0].color)}">${h ? "–" : fmt(r.pts.A)}</span><span class="sbar a"><i style="width:${h ? 0 : r.pts.A / m * 100}%;background:${doc.config.teams[0].color}"></i></span><span class="lab">${esc(ph.name)}</span><span class="sbar"><i style="width:${h ? 0 : r.pts.B / m * 100}%;background:${light(doc.config.teams[1].color)}"></i></span><span class="v" style="color:${light(doc.config.teams[1].color)}">${h ? "–" : fmt(r.pts.B)}</span></div>`; }).join("");
+    return `<div class="st-row"><span class="v va" style="color:${light(doc.config.teams[0].color)}">${h ? "–" : fmt(r.pts.A)}</span><span class="sbar a"><i style="width:${h ? 0 : r.pts.A / m * 100}%;background:${light(doc.config.teams[0].color)}"></i></span><span class="lab">${esc(ph.name)}</span><span class="sbar"><i style="width:${h ? 0 : r.pts.B / m * 100}%;background:${light(doc.config.teams[1].color)}"></i></span><span class="v" style="color:${light(doc.config.teams[1].color)}">${h ? "–" : fmt(r.pts.B)}</span></div>`; }).join("");
   st.classList.toggle("no-timer", !stTimer);
   st.querySelector('[data-act="st-timer"]').textContent = stTimer ? "タイマーを隠す" : "タイマーを出す";
   st.querySelector('[data-act="st-hide"]').textContent = stHidden ? "点数を出す" : "点数を伏せる";
@@ -512,7 +539,12 @@ function parseVal(el) {
   const t = el.dataset.type, v = ["num", "list", "pairs"].includes(t) ? el.value.normalize("NFKC") : el.value;
   if (t === "num") return v.trim() === "" ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
   if (t === "list") return v.split(/[,\s、]+/).filter(Boolean).map(Number).filter(n => !isNaN(n));
-  if (t === "pairs") return v.split(/[,、]+/).map(s => s.split(/[:：]/)).filter(p => p[0] !== undefined && p[0].trim() !== "").map(([a, b]) => { const n = Number(a); return [isNaN(n) ? 0 : n, el.dataset.bind.endsWith("options") ? (b || "").trim() : Number(b) || 0]; });
+  if (t === "pairs") {
+    const isOpt = el.dataset.bind.endsWith("options");
+    const out = v.split(/[,、]+/).map(x => x.trim()).filter(Boolean).map(x => x.split(/\s*[:：=＝]\s*|(?<=\d)\s*-\s*(?=\d)/));
+    if (out.some(p => !Number.isFinite(Number(p[0])) || p.length < 2 || (!isOpt && !Number.isFinite(Number(p[1]))))) return undefined; /* 読めない書き方 */
+    return out.map(([a, b]) => [Number(a), isOpt ? String(b).trim() : Number(b)]);
+  }
   if (t === "lines") return v.split(/\n/).map(s => s.trim()).filter(Boolean);
   return v;
 }
@@ -545,8 +577,22 @@ function adjustTable(tb, old) {
 const fixTies = ord => { if (ord[0]) ord[0].tie = false; return ord; };
 function onBind(el, final) {
   const path = el.dataset.bind, val = parseVal(el);
-  if (JSON.stringify(getPath(path)) === JSON.stringify(val)) { if (final) renderPanel(); return; }
+  if (val === undefined) { flash(el.dataset.bind.endsWith("options") ? "「点:説明」をカンマで区切って入れてください（例 10:30秒以内,6:1分以内）。" : "「以上の値:点」をカンマで区切って入れてください（例 8:5,6:3,4:1）。"); renderSoon(); return; }
+  if (JSON.stringify(getPath(path)) === JSON.stringify(val)) { if (final) renderSoon(); return; }
+  /* 設定の数字を空欄のまま確定したら、元の値に戻す */
+  if (val == null && path.startsWith("config.") && el.dataset.type === "num") { renderSoon(); return; }
   const parent = path.split(".").slice(0, -1).join("."), old = el.dataset.re ? JSON.parse(JSON.stringify(getPath(parent))) : null;
+  /* 結果が入っている卓の種類を変える・席を減らすのは、その結果を消してからにしてもらう */
+  if (el.dataset.re === "kind" || el.dataset.re === "per") {
+    const id = old.id, ord = doc.results.order[id] || [], abs = doc.results.absent[id] || [];
+    const hasResult = ord.length || abs.length || doc.results.team[id] || doc.results.duel[id];
+    const newPer = el.dataset.re === "per" ? val : (val === "duel" ? 1 : val === "team" && old.kind !== "team" ? 2 : old.perTeam);
+    const lost = [...ord, ...abs].some(o => o.i >= newPer);
+    if ((el.dataset.re === "kind" && hasResult) || (el.dataset.re === "per" && lost)) {
+      flash(`「${old.game || "この卓"}」には結果が入っています。先に「当日」でこの卓の結果を消してから変えてください。`);
+      renderSoon(); return;
+    }
+  }
   setPath(path, val);
   const rk = rKeyOf(path);
   if (rk) markR(rk); else markC();
@@ -557,23 +603,37 @@ function onBind(el, final) {
     const pt = getPath(parent), mx = pt.max || doc.config.teamSize;
     Object.assign(pt, { max: mx, per: pt.per ?? 1, tiers: pt.tiers && pt.tiers.length ? pt.tiers : [[mx, 5], [Math.ceil(mx * .75), 3], [Math.ceil(mx * .5), 1]], options: pt.options && pt.options.length ? pt.options : [[10, "1位"]] });
   }
-  changed(final || el.tagName === "SELECT" || !!el.dataset.re);
+  /* 文字や数字の欄は描き直さない（打っている途中・Tabで次の欄へ移るときにカーソルが消えないように） */
+  const needRender = el.tagName === "SELECT" || !!el.dataset.re || (final && (path.startsWith("results.") || ["list", "pairs", "num"].includes(el.dataset.type) || path.endsWith(".name") || path.startsWith("config.teams")));
+  changed(false);
+  if (needRender) renderSoon();
 }
+/* 描き直しは少し後で。Tabで次の欄に移ってから描き直し、その欄にカーソルを戻す */
+let renderTimer2 = null;
+function renderSoon() { clearTimeout(renderTimer2); renderTimer2 = setTimeout(() => renderPanel(), 0); }
 let localSeq = 0;
 function changed(rerender) {
   localSeq++;
+  const lastU = undoStack[undoStack.length - 1]; if (lastU && lastU.at == null) lastU.at = latestStamp();
   try { localStorage.setItem(LS_DOC, JSON.stringify(doc)); } catch (_) {}
   normalize(); renderBoard(); renderStage();
   if (rerender) renderPanel();
   pushSoon();
 }
-/* 消す操作の前の状態を1つだけ取っておき、「元に戻す」で戻せるようにする */
-let snapDoc = null, undoTimer = null;
-function snapshot(msg) {
-  snapDoc = JSON.parse(JSON.stringify({ config: doc.config, results: doc.results }));
+/* 「元に戻す」：消した卓・種目・アイテムは、その物だけを元の場所に戻す（ほかの入力は消さない）。
+   大会まるごとの置きかえ（白紙・見本・読み込み・結果を消す）は、そのあとに入力や変更がなかったときだけ戻せる */
+let undoStack = [], undoTimer = null;
+const latestStamp = () => Math.max(doc.cts, doc.tts, ...Object.values(doc.rts), 0);
+function pushUndo(msg, apply, whole) {
+  undoStack.push({ msg, apply, whole, at: null }); /* at は操作を反映した直後（changed）に決める */ if (undoStack.length > 10) undoStack.shift();
   const u = $("undo"); $("undoMsg").textContent = msg; u.hidden = false;
-  clearTimeout(undoTimer); undoTimer = setTimeout(() => { u.hidden = true; snapDoc = null; }, 30000);
+  clearTimeout(undoTimer); undoTimer = setTimeout(() => { u.hidden = true; }, 30000);
 }
+function wholeUndo(msg) {
+  const keep = JSON.parse(JSON.stringify({ config: doc.config, results: doc.results }));
+  pushUndo(msg, () => { const before = doc.results; doc.config = sanitizeConfig(keep.config); doc.results = sanitizeResults(keep.results); markAllR(before); markAllR(doc.results); }, true);
+}
+const findPhase = id => doc.config.phases.find(p => p.id === id);
 /* 危ない操作は2回押しで実行（1回目はボタンの文字が変わる） */
 function sure(b, label) {
   if (b.dataset.sure) return true;
@@ -583,7 +643,9 @@ function sure(b, label) {
 }
 
 document.addEventListener("change", e => { const el = e.target; if (el.dataset && el.dataset.bind) onBind(el, true); });
-document.addEventListener("input", e => { const el = e.target; if (el.dataset && el.dataset.bind && el.tagName !== "SELECT" && el.dataset.type !== "list" && el.dataset.type !== "pairs") onBind(el, false); });
+/* 打っている途中は反映しない欄：設定の数字（空欄の瞬間に0や1として扱わないため）・人数や種類・リスト */
+const commitOnly = el => el.tagName === "SELECT" || el.dataset.re || ["list", "pairs"].includes(el.dataset.type) || (el.dataset.type === "num" && el.dataset.bind.startsWith("config."));
+document.addEventListener("input", e => { const el = e.target; if (el.dataset && el.dataset.bind && !commitOnly(el)) onBind(el, false); });
 
 /* ---------- 操作 ---------- */
 function newPid() { const id = uid("p"); openP[id] = true; return id; }
@@ -602,24 +664,33 @@ document.addEventListener("click", async e => {
   switch (a) {
     case "load-sample": case "new-blank": {
       if (!sure(b, a === "load-sample" ? "今の内容を消して見本を読み込む" : "今の内容を消して白紙にする")) break;
-      snapshot(a === "load-sample" ? "見本を読み込みました" : "白紙にしました");
+      wholeUndo(a === "load-sample" ? "見本を読み込みました" : "白紙にしました");
       const before = doc.results; doc.config = a === "load-sample" ? sampleConfig() : blankConfig(); doc.results = blankResults(); markC(); markAllR(before); changed(true); break;
     }
     case "undo": {
-      if (!snapDoc) break;
-      const before = doc.results; doc.config = sanitizeConfig(snapDoc.config); doc.results = sanitizeResults(snapDoc.results); markC(); markAllR(before); markAllR(doc.results);
-      snapDoc = null; $("undo").hidden = true; changed(true); flash("元に戻しました"); break;
+      const u = undoStack.pop(); $("undo").hidden = true; if (!u) break;
+      if (u.whole && latestStamp() > u.at) { undoStack = []; flash("このあとに入力や変更があったため、元に戻せません。"); break; }
+      if (u.apply() === false) { flash("元の場所が見つからないため、元に戻せませんでした。"); break; }
+      markC(); changed(true); flash(`元に戻しました（${u.msg}）`);
+      if (undoStack.length) { const n = undoStack[undoStack.length - 1]; $("undoMsg").textContent = n.msg; $("undo").hidden = false; }
+      break;
     }
     case "add-item": c.items.push({ id: uid("i"), name: "アイテム" + (c.items.length + 1), desc: "" }); markC(); changed(true); break;
-    case "del-item": { if (!sure(b, "消す")) break; snapshot(`アイテム「${c.items[i].name}」を消しました`); const id = c.items[i].id; c.items.splice(i, 1); c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === id) tb.item = ""; })); markC(); changed(true); break; }
+    case "del-item": {
+      if (!sure(b, "消す")) break;
+      const it = c.items[i], refs = []; c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === it.id) { tb.item = ""; refs.push(tb.id); } }));
+      c.items.splice(i, 1);
+      pushUndo(`アイテム「${it.name}」を消しました`, () => { doc.config.items.splice(Math.min(i, doc.config.items.length), 0, it); refs.forEach(id => { const tb = findTable(id); if (tb) tb.item = it.id; }); });
+      markC(); changed(true); break;
+    }
     case "add-round": markC(); c.phases.push({ id: newPid(), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
     case "add-event": markC(); c.phases.push({ id: newPid(), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
     case "move": { const d = Number(b.dataset.d), k = i + d; if (k < 0 || k >= c.phases.length) break; [c.phases[i], c.phases[k]] = [c.phases[k], c.phases[i]]; markC(); changed(true); break; }
-    case "del-phase": if (!sure(b, "消す")) break; snapshot(`「${c.phases[i].name}」を消しました`); c.phases.splice(i, 1); markC(); changed(true); break;
+    case "del-phase": { if (!sure(b, "消す")) break; const ph = c.phases.splice(i, 1)[0]; pushUndo(`「${ph.name}」を消しました`, () => { doc.config.phases.splice(Math.min(i, doc.config.phases.length), 0, ph); }); markC(); changed(true); break; }
     case "add-table": c.phases[i].tables.push(newTable(b.dataset.k, c.phases[i])); markC(); changed(true); break;
-    case "del-table": if (!sure(b, "卓を消す")) break; snapshot(`「${c.phases[i].tables[j].game || "卓"}」を消しました`); c.phases[i].tables.splice(j, 1); markC(); changed(true); break;
+    case "del-table": { if (!sure(b, "卓を消す")) break; const pid = c.phases[i].id, tb = c.phases[i].tables.splice(j, 1)[0]; pushUndo(`「${tb.game || "卓"}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.tables.splice(Math.min(j, ph.tables.length), 0, tb); }); markC(); changed(true); break; }
     case "add-part": c.phases[i].parts.push({ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); markC(); changed(true); break;
-    case "del-part": if (!sure(b, "消す")) break; snapshot(`「${c.phases[i].parts[j].name}」を消しました`); c.phases[i].parts.splice(j, 1); markC(); changed(true); break;
+    case "del-part": { if (!sure(b, "消す")) break; const pid = c.phases[i].id, pt = c.phases[i].parts.splice(j, 1)[0]; pushUndo(`「${pt.name}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.parts.splice(Math.min(j, ph.parts.length), 0, pt); }); markC(); changed(true); break; }
     case "phase": cur = c.phases[i].id; try { localStorage.setItem("vsteams-builder-cur", cur); } catch (_) {} renderPanel(); window.scrollTo({ top: 0 }); break;
     case "toggle-table": { const id = b.dataset.tb, tb = findTable(id); openT[id] = !(openT[id] || tableRes(tb).status !== "done"); renderPanel(); break; }
     case "pick": {
@@ -629,6 +700,7 @@ document.addEventListener("click", async e => {
       if (absentMode[id]) {
         /* 欠席の席を付け外し。順位が付いていた人なら順位も消す */
         const abs = doc.results.absent[id] = absentOf(tb).slice(), ai = abs.findIndex(a => a.t === t && a.i === k);
+        if (tb.perTeam < 2) { flash("1対1の卓では欠席を選べません。"); break; }
         if (ai >= 0) abs.splice(ai, 1); else if (abs.length < 1) abs.push({ t, i: k }); else { flash("欠席にできるのは1卓に1人までです。"); break; }
         if (at >= 0) { const gone = ord.splice(at, 1)[0]; if (ord[at] && ord[at].tie) ord[at].tie = at > 0 && gone.tie; fixTies(ord); markR("order|" + id); }
         markR("absent|" + id); changed(true); break;
@@ -636,7 +708,7 @@ document.addEventListener("click", async e => {
       if (absentOf(tb).some(a => a.t === t && a.i === k)) { flash("欠席の席です。取り消すときは「欠席がいる」を押してから押してください。"); break; }
       /* 消した人と同着だった次の人は、消した人の立場（前と同着かどうか）を引き継ぐ */
       if (at >= 0) { const gone = ord.splice(at, 1)[0]; if (ord[at] && ord[at].tie) ord[at].tie = at > 0 && gone.tie; fixTies(ord); }
-      else if (ord.length < tb.perTeam * 2 - absentOf(tb).length) { ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 }); tieNext[id] = false; }
+      else if (ord.length < tb.perTeam * 2 - absentOf(tb).length) { const ab = absentOf(tb).length, afterAbs = ab && ord.length === tb.perTeam * 2 - 1 - ab; ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 && !afterAbs }); tieNext[id] = false; }
       markR("order|" + id); changed(true); break;
     }
     case "absent-mode": absentMode[b.dataset.tb] = !absentMode[b.dataset.tb]; tieNext[b.dataset.tb] = false; renderPanel(); break;
@@ -657,10 +729,10 @@ document.addEventListener("click", async e => {
     case "st-close": stageOn = false; saveStage(); try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (_) {} renderStage(); break;
     case "st-hide": stHidden = !stHidden; saveStage(); renderStage(); break;
     case "st-timer": stTimer = !stTimer; saveStage(); renderStage(); break;
-    case "use-item": { const k = b.dataset.tb; if (doc.results.used[k]) delete doc.results.used[k]; else doc.results.used[k] = true; markR("used|" + k); changed(true); break; }
+    case "use-item": { const k = b.dataset.tb, w = doc.results.duel[k]; if (doc.results.used[k] === w) delete doc.results.used[k]; else if (w) doc.results.used[k] = w; markR("used|" + k); changed(true); break; }
     case "welcome-close": case "welcome-blank":
       try { localStorage.setItem("vsteams-builder-welcome", "1"); } catch (_) {}
-      if (a === "welcome-blank") { snapshot("白紙にしました"); const before = doc.results; doc.config = blankConfig(); doc.results = blankResults(); markC(); markAllR(before); tab = "setup"; try { localStorage.setItem(LS_TAB, tab); } catch (_) {} changed(true); renderTabs(); }
+      if (a === "welcome-blank") { wholeUndo("白紙にしました"); const before = doc.results; doc.config = blankConfig(); doc.results = blankResults(); markC(); markAllR(before); tab = "setup"; try { localStorage.setItem(LS_TAB, tab); } catch (_) {} changed(true); renderTabs(); }
       else renderPanel();
       break;
     case "st-full": try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (_) {} break;
@@ -671,7 +743,7 @@ document.addEventListener("click", async e => {
     }
     case "timer-set": tset({ total: Number(b.dataset.min) * 60000, label: b.dataset.label, end: null, paused: null }); fl = {}; renderPanel(); break;
     case "timer-go": {
-      unlockAudio(); const now = Date.now(), tm = doc.timer;
+      unlockAudio(); const now = nowMs(), tm = doc.timer;
       if (tm.end != null) tset({ paused: tm.end - now, end: null });
       else if (tm.paused != null) tset({ end: now + tm.paused, paused: null });
       else { const mi = $("tmMin"), la = $("tmLabel"); const total = mi ? Math.max(1, Number(mi.value) || 1) * 60000 : tm.total; tset({ total, label: la ? la.value : tm.label, end: now + total, paused: null }); fl = {}; }
@@ -679,16 +751,24 @@ document.addEventListener("click", async e => {
     }
     case "timer-reset": { const mi = $("tmMin"), la = $("tmLabel"); tset({ total: mi ? Math.max(1, Number(mi.value) || 1) * 60000 : doc.timer.total, label: la ? la.value : doc.timer.label, end: null, paused: null }); fl = {}; tick(true); break; }
     case "timer-sound": sound = !sound; if (sound) { unlockAudio(); beep(880, .15, 1); } tick(true); break;
-    case "sync-save": { const url = ($("syncUrl").value || "").trim(), id = ($("syncId").value || "").trim().replace(/[^\w-]/g, ""); if (!url || !id) { flash("URLと大会IDの両方を入れてください。"); break; } if (!SYNC_URL_OK.test(url)) { flash("URLは https://script.google.com/ で始まるものを入れてください。"); break; } saveSync({ url, id }); joining = true; syncRev = null; renderPanel(); startSync(true); break; }
+    case "sync-save": {
+      const url = ($("syncUrl").value || "").trim(), id = ($("syncId").value || "").trim().replace(/[^\w-]/g, ""), key = ($("syncKey").value || "").trim();
+      if (!url || !id) { flash("URLと大会IDの両方を入れてください。"); break; }
+      if (!okSyncUrl(url)) { flash("URLは https://script.google.com/ で始まる、Apps Script のウェブアプリのURLを入れてください。"); break; }
+      saveSync({ url, id, key }); startJoin(); renderPanel(); startSync(true); break;
+    }
+    case "join-yes": { const pj = pendingJoin; pendingJoin = null; if (!pj) break; saveSync(pj); startJoin(); renderPanel(); startSync(true); break; }
+    case "join-no": pendingJoin = null; renderPanel(); break;
+    case "restore-backup": { let bk = null; try { bk = localStorage.getItem("vsteams-builder-backup"); } catch (_) {} if (bk && $("dataBox")) { $("dataBox").value = JSON.stringify(JSON.parse(bk), null, 1); flash("参加前の内容を下の欄に出しました。必要なら「上の内容を読み込む」で戻せます（共有中の大会も置きかわります）。"); } break; }
     case "sync-off": saveSync({}); stopSync(); renderPanel(); break;
     case "copy-share": try { await navigator.clipboard.writeText($("shareLink").value); flash("リンクをコピーしました"); } catch (_) { $("shareLink").select(); } break;
-    case "reset-results": { if (!sure(b, "本当に消す（もう一度押す）")) break; snapshot("結果を消しました"); const before = doc.results; doc.results = blankResults(); markAllR(before); changed(true); break; }
+    case "reset-results": { if (!sure(b, "本当に消す（もう一度押す）")) break; wholeUndo("結果を消しました"); const before = doc.results; doc.results = blankResults(); markAllR(before); changed(true); break; }
     case "copy-data": try { await navigator.clipboard.writeText($("dataBox").value); flash("コピーしました"); } catch (_) { $("dataBox").select(); } break;
     case "import": case "import-config": {
       try {
         const d = JSON.parse($("dataBox").value); if (!d.config || !Array.isArray(d.config.phases)) throw 0;
         if (!sure(b, "今の内容を置きかえて読み込む")) break;
-        snapshot("読み込みました"); const before = doc.results;
+        wholeUndo("読み込みました"); const before = doc.results;
         doc.config = sanitizeConfig(d.config); doc.results = a === "import" ? sanitizeResults(d.results) : blankResults(); markC(); markAllR(before); markAllR(doc.results); changed(true); flash("読み込みました");
       }
       catch (_) { flash("読み込めませんでした。書き出した文字をそのまま貼ってください。"); }
@@ -700,6 +780,8 @@ document.addEventListener("click", async e => {
 /* ---------- タイマー ---------- */
 let sound = false, fl = {}, prevRem = null, actx = null, alertTimer = null;
 function tset(p) { Object.assign(doc.timer, p); markT(); changed(false); }
+/* 共有中は共有先の時計に合わせた「今」を使う */
+const nowMs = () => Date.now() + clockOffset;
 const remOf = now => doc.timer.end != null ? doc.timer.end - now : (doc.timer.paused != null ? doc.timer.paused : doc.timer.total);
 const mmss = ms => { const neg = ms < 0; ms = Math.abs(ms); let s = Math.floor(ms / 1000); if (!neg && ms % 1000) s++; return (neg ? "+" : "") + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 function unlockAudio() { try { if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); } if (actx && actx.state === "suspended") actx.resume(); } catch (_) {} }
@@ -707,7 +789,7 @@ function beep(f = 880, d = .25, n = 3) { if (!actx) return; try { for (let i = 0
 function flash(msg, f, n) { const a = $("alert"); a.textContent = msg; a.hidden = false; clearTimeout(alertTimer); alertTimer = setTimeout(() => { a.hidden = true; }, 15000); if (sound && f) beep(f, .25, n || 3); }
 $("alert").addEventListener("click", () => { $("alert").hidden = true; });
 function tick() {
-  const now = Date.now(), tm = doc.timer, rem = remOf(now), running = tm.end != null, L = tm.label ? tm.label + "　" : "";
+  const now = nowMs(), tm = doc.timer, rem = remOf(now), running = tm.end != null, L = tm.label ? tm.label + "　" : "";
   if (running && prevRem != null) {
     if (!fl.f15 && tm.total > 15 * 60000 && prevRem > 15 * 60000 && rem <= 15 * 60000) { fl.f15 = 1; flash(L + "残り15分です", 988, 2); }
     if (!fl.f5 && tm.total > 5 * 60000 && prevRem > 5 * 60000 && rem <= 5 * 60000) { fl.f5 = 1; flash(L + "残り5分です", 988, 3); }
@@ -716,7 +798,8 @@ function tick() {
   prevRem = running ? rem : null;
   const lv = rem <= 5 * 60000 ? "last" : rem <= 15 * 60000 ? "warn" : "";
   const pct = tm.total ? Math.min(100, Math.max(0, (1 - rem / tm.total) * 100)) : 0;
-  const endTxt = running ? (rem > 0 ? `${new Date(tm.end).getHours()}:${String(new Date(tm.end).getMinutes()).padStart(2, "0")} に終了` : "時間切れ") : (tm.paused != null ? "一時停止中" : "スタートを押すと始まります");
+  const endLocal = new Date((tm.end || 0) - clockOffset);
+  const endTxt = running ? (rem > 0 ? `${endLocal.getHours()}:${String(endLocal.getMinutes()).padStart(2, "0")} に終了` : "時間切れ") : (tm.paused != null ? "一時停止中" : "スタートを押すと始まります");
   const set = (id, f) => { const el = $(id); if (el) f(el); };
   set("tmBig", el => { el.textContent = mmss(rem); el.style.color = lv === "last" ? "var(--bad)" : lv === "warn" ? "var(--gold)" : ""; });
   set("tmEnd", el => el.textContent = (tm.label ? tm.label + "　" : "") + endTxt);
@@ -736,7 +819,12 @@ setInterval(tick, 250);
  */
 function syncConf() { try { return JSON.parse(localStorage.getItem(LS_SYNC) || "{}"); } catch (_) { return {}; } }
 function saveSync(s) { try { localStorage.setItem(LS_SYNC, JSON.stringify(s)); } catch (_) {} }
-let pollTimer = null, pushTimer = null, pushing = false, syncRev = null, joining = false, pendingRender = false;
+let pollTimer = null, pushTimer = null, pushing = false, syncRev = null, joining = false, joinAt = 0, pendingRender = false, pendingJoin = null, readOnly = false, clockOffset = 0;
+/* 共有を始めるとき：共有先に大会があればそちらを読み込む。ただし、始めてから手元で入力したものは混ぜて残す */
+function startJoin() { joining = true; joinAt = latestStamp(); syncRev = null; readOnly = false; }
+function backupLocal() { try { localStorage.setItem("vsteams-builder-backup", JSON.stringify({ config: doc.config, results: doc.results })); } catch (_) {} }
+/* 共有先の時計との差（タイマーを端末の時計のずれに左右されないようにする） */
+function noteClock(j, t0, t1) { if (typeof j.now === "number") clockOffset = j.now - (t0 + t1) / 2; }
 function syncStat(t, bad) { const el = $("syncStat"); el.textContent = t; el.style.color = bad ? "#ff9b90" : ""; }
 function stopSync() { clearInterval(pollTimer); pollTimer = null; syncRev = null; syncStat("この端末に保存"); }
 const rGet = (R, key) => { const k = key.split("|"); if (k[0] === "ev") return ((R.ev[k[1]] || {})[k[2]] || [])[Number(k[3])]; return (R[k[0]] || {})[k[1]]; };
@@ -767,27 +855,33 @@ document.addEventListener("focusout", () => setTimeout(() => { if (pendingRender
 async function pull() {
   const s = syncConf(); if (!s.url || !s.id) return;
   try {
-    const r = await fetch(`${s.url}?id=${encodeURIComponent(s.id)}&t=${Date.now()}`);
-    const j = await r.json();
+    const t0 = Date.now(), r = await fetch(`${s.url}?id=${encodeURIComponent(s.id)}&t=${t0}`);
+    const j = await r.json(); noteClock(j, t0, Date.now());
     if (!j.ok) throw new Error(j.error || "error");
-    if (!j.doc) { joining = false; syncRev = j.rev || 0; pushSoon(); syncStat(`共有中（${s.id}）`); return; }
-    if (j.rev === syncRev && !joining) { syncStat(`共有中（${s.id}）`); return; }
+    const label = readOnly ? `共有中・見るだけ（${s.id}）` : `共有中（${s.id}）`;
+    if (!j.doc) { joining = false; syncRev = j.rev || 0; pushSoon(); syncStat(label); return; }
+    if (j.rev === syncRev && !joining) { syncStat(label); return; }
     const remote = sanitizeDoc(typeof j.doc === "string" ? JSON.parse(j.doc) : j.doc);
     seenTimes(remote);
     syncRev = j.rev;
-    if (joining) { joining = false; adopt(remote); flash("共有中の大会を読み込みました"); }
+    if (joining) {
+      joining = false;
+      if (latestStamp() > joinAt) { const merged = mergeDocs(doc, remote); adopt(merged); if (hasNewer(merged, remote)) pushSoon(); }
+      else { backupLocal(); adopt(remote); flash("共有中の大会を読み込みました（この端末の前の内容は「データ・共有」から出せます）"); }
+    }
     else { const merged = mergeDocs(doc, remote); adopt(merged); if (hasNewer(merged, remote)) pushSoon(); }
-    syncStat(`共有中（${s.id}）`);
+    syncStat(label);
   } catch (err) { syncStat("共有先につながりません", true); }
 }
 function pushSoon() { if (!syncConf().url) return; clearTimeout(pushTimer); pushTimer = setTimeout(push, 400); }
 async function push(tries = 0) {
-  const s = syncConf(); if (!s.url || !s.id || joining) return;
+  const s = syncConf(); if (!s.url || !s.id || joining || readOnly) return;
   if (pushing) { pushSoon(); return; }
   pushing = true; const seq = localSeq;
   try {
-    const r = await fetch(s.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ id: s.id, base: syncRev, doc: JSON.stringify(doc) }) });
-    const j = await r.json();
+    const t0 = Date.now(), r = await fetch(s.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ id: s.id, key: s.key || "", base: syncRev, doc: JSON.stringify(doc) }) });
+    const j = await r.json(); noteClock(j, t0, Date.now());
+    if (j.error === "key") { readOnly = true; pushing = false; syncStat(`共有中・見るだけ（${s.id}）`, true); flash("合言葉が違うか入っていないため、この端末の入力は共有されません。"); return; }
     if (j.conflict) {
       /* ほかの端末が先に保存していた：混ぜてから送り直す */
       const remote = sanitizeDoc(typeof j.doc === "string" ? JSON.parse(j.doc) : j.doc);
@@ -803,7 +897,20 @@ async function push(tries = 0) {
 function startSync(first) { const s = syncConf(); if (!s.url || !s.id) return; clearInterval(pollTimer); pollTimer = setInterval(() => { if (document.visibilityState === "visible") pull(); }, 3000); if (first) pull(); }
 
 /* 共有リンク（?e=大会ID&s=URL）で開いたとき */
-(() => { const q = new URLSearchParams(location.search), id = (q.get("e") || "").replace(/[^\w-]/g, ""), url = q.get("s") || ""; if (id && SYNC_URL_OK.test(url)) { saveSync({ id, url }); joining = true; history.replaceState(null, "", location.pathname); } })();
+/* 確認なしには参加しない（細工したリンクで手元の内容を置きかえられないように） */
+(() => {
+  const q = new URLSearchParams(location.search), id = (q.get("e") || "").replace(/[^\w-]/g, ""), url = q.get("s") || "", key = q.get("k") || "";
+  if (q.has("e")) history.replaceState(null, "", location.pathname);
+  if (!id || !okSyncUrl(url)) return;
+  const cur = syncConf();
+  if (cur.id === id && cur.url === url) { if (key && cur.key !== key) saveSync({ ...cur, key }); return; }
+  pendingJoin = { id, url, key }; tab = "data";
+})();
+/* 同じブラウザのほかのタブで保存されたら、欄ごとに混ぜて取り込む */
+window.addEventListener("storage", e => {
+  if (e.key !== LS_DOC || !e.newValue) return;
+  try { const other = sanitizeDoc(JSON.parse(e.newValue)); seenTimes(other); if (hasNewer(other, doc)) adopt(mergeDocs(doc, other)); } catch (_) {}
+});
 
 renderAll();
 startSync(true);

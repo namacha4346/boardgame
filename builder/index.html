@@ -76,7 +76,7 @@ table.seats td.pt{font-variant-numeric:tabular-nums;font-weight:700;text-align:r
 textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:12px}
 /* 当日画面 */
 .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
-.pills button{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:999px}
+.pills button{position:relative;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:999px}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
 .dot.partial{background:var(--gold)}.dot.done{background:var(--ok)}
 .tbar{padding:10px 14px}
@@ -156,6 +156,7 @@ details.pd>.card{border:0;border-radius:0 0 14px 14px}
 #stage.no-timer .st-timer{display:none}
 .alert{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;background:#b4432f;color:#fff;font-weight:700;padding:12px 20px;border-radius:12px;max-width:92vw;text-align:center}
 @media (max-width:640px){.st-row{grid-template-columns:3em 1fr 6em 1fr 3em}}
+body.stage-open .undo{display:none!important}
 .undo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:41;background:var(--navy);color:#fff;padding:10px 12px 10px 18px;border-radius:12px;display:flex;gap:14px;align-items:center;max-width:92vw;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 .undo button{background:#c9a24a;border-color:#c9a24a;color:#141b33;font-weight:700}
 </style>

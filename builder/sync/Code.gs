@@ -8,9 +8,15 @@
  * その間にほかの端末が保存していたら（版番号が違ったら）保存せず、今の内容と版番号を返す。
  * 端末はそれを手元の内容と欄ごとに混ぜてから、もう一度送る。こうして、ほかの端末の入力を上書きで消さない。
  */
+
+// ▼ 書き込み用の合言葉。必ず自分だけの文字に変えてから使う（運営スタッフだけに伝える）。
+//   空のままだと、URLを知っている人は誰でも書き込めてしまう。
+var WRITE_KEY = '';
+
 var SHEET_NAME = 'data';
-var CHUNK = 45000; // 1つのセルに入れる文字数（セルの上限は5万字）
+var CHUNK = 45000;     // 1つのセルに入れる文字数（セルの上限は5万字）
 var MAX_DOC = 2000000; // 1大会のデータの上限（文字数）
+var MAX_EVENTS = 200;  // 保存できる大会の数の上限
 
 function sheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -31,6 +37,7 @@ function read_(sh, row) {
 }
 
 function json_(obj) {
+  obj.now = Date.now(); // 端末の時計のずれを直すため、こちらの時刻も返す
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -52,6 +59,7 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var body = JSON.parse(e.postData.contents);
+    if (WRITE_KEY && String(body.key || '') !== WRITE_KEY) return json_({ ok: false, error: 'key' });
     var id = cleanId_(body.id), doc = String(body.doc || '');
     if (!id) return json_({ ok: false, error: 'no id' });
     if (doc.length > MAX_DOC) return json_({ ok: false, error: 'too large' });
@@ -62,6 +70,7 @@ function doPost(e) {
       if (body.base !== rev) return json_({ ok: false, conflict: true, rev: rev, doc: cur.doc }); // ほかの端末が先に保存していた
       sh.getRange(row, 1, 1, sh.getLastColumn()).clearContent();
     } else {
+      if (sh.getLastRow() >= MAX_EVENTS) return json_({ ok: false, error: 'too many events' });
       row = sh.getLastRow() + 1;
     }
     var parts = [];
