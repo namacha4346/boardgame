@@ -10,21 +10,25 @@
 :root{
   --bg:#f3f1ea; --surface:#fbfaf6; --fg:#141b33; --muted:#5d6273; --line:#ddd6c4;
   --gold:#a57d24; --gold-soft:#f3e7c7; --ok:#2f7a5a; --ok-soft:#e3f0e9; --bad:#b4432f; --bad-soft:#f8e6e1;
-  --navy:#141b33;
+  --navy:#141b33; --btn:#141b33; --btn-fg:#fff;
+  --ta:#c0392b; --tb:#1f3a5f; --ta-t:var(--ta); --tb-t:var(--tb);
   --display:"Dela Gothic One","Noto Sans JP",system-ui,sans-serif;
   --body:"Noto Sans JP","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root{
   --bg:#10142a; --surface:#181e38; --fg:#f2eee3; --muted:#a8adc0; --line:#2e365a;
-  --gold:#e0bb62; --gold-soft:#3a3220; --ok:#6fc29b; --ok-soft:#183a2f; --bad:#ff8a78; --bad-soft:#3e1f1d; color-scheme:dark}}
+  --gold:#e0bb62; --gold-soft:#3a3220; --ok:#6fc29b; --ok-soft:#183a2f; --bad:#ff8a78; --bad-soft:#3e1f1d; color-scheme:dark;
+  --btn:#e0bb62; --btn-fg:#141b33;
+  /* 暗い背景では、チームの色を明るくして文字に使う */
+  --ta-t:color-mix(in srgb,var(--ta) 55%,#fff); --tb-t:color-mix(in srgb,var(--tb) 45%,#fff)}}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
 [hidden]{display:none!important}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 12px}
-button.primary{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:700}
+button.primary{background:var(--btn);color:var(--btn-fg);border-color:var(--btn);font-weight:700}
 button.danger{color:var(--bad);border-color:var(--bad)}
 button.small{padding:3px 9px;font-size:13px}
 button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
@@ -68,7 +72,7 @@ table.seats td.pt{font-variant-numeric:tabular-nums;font-weight:700;text-align:r
 .scroll{overflow-x:auto}
 .res{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:6px;font-weight:700}
 .res .v{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
-.ta{color:var(--ta)}.tb{color:var(--tb)}
+.ta{color:var(--ta-t)}.tb{color:var(--tb-t)}
 textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:12px}
 /* 当日画面 */
 .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
@@ -88,14 +92,14 @@ textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:
 .guide{margin:0;font-size:15px}
 .seatgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
 .seat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:68px;padding:8px 10px;border-width:2px;text-align:left}
-.seat.sa{border-color:color-mix(in srgb,var(--ta) 60%,transparent)}.seat.sb{border-color:color-mix(in srgb,var(--tb) 60%,transparent)}
+.seat.sa{border-color:color-mix(in srgb,var(--ta-t) 70%,transparent)}.seat.sb{border-color:color-mix(in srgb,var(--tb-t) 70%,transparent)}
 .seat .rk{font-family:var(--display);font-size:18px;min-height:1.2em;line-height:1.2}
 .seat .nm{font-weight:700;overflow-wrap:anywhere}
 .seat .pt{font-size:12px;color:var(--muted)}
 .seat.ranked.sa{background:color-mix(in srgb,var(--ta) 16%,var(--surface))}.seat.ranked.sb{background:color-mix(in srgb,var(--tb) 16%,var(--surface))}
 .winrow{display:flex;gap:8px;flex-wrap:wrap}
 .win{flex:1 1 140px;min-height:56px;font-weight:700;border-width:2px}
-.win.sa{border-color:var(--ta)}.win.sb{border-color:var(--tb)}
+.win.sa{border-color:var(--ta-t)}.win.sb{border-color:var(--tb-t)}
 .win[aria-pressed="true"].sa{background:var(--ta);color:#fff}.win[aria-pressed="true"].sb{background:var(--tb);color:#fff}
 .qlabel{font-size:13px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);padding-top:6px}
 .numrow{display:grid;grid-template-columns:7em minmax(0,1fr) 3.5em;gap:8px;align-items:center}
@@ -106,6 +110,14 @@ textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:
 .npt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 @media (max-width:520px){.numrow{grid-template-columns:1fr auto}.numrow .nums{grid-column:1/-1;grid-row:2}}
 @media (max-width:520px){.vs small{display:none}.tm .n{font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.seat.absent{border-style:dashed;opacity:.7}
+.seat.absent .rk{font-family:var(--body);font-size:13px;font-weight:700}
+.welcome{border:2px solid var(--gold);background:var(--gold-soft)}
+.welcome ol{margin:0;padding-left:1.4em}
+.itemrow{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:4px 0}
+.itemrow.used .nm{text-decoration:line-through;color:var(--muted)}
+.st-items .ib.used{opacity:.35;text-decoration:line-through}
 /* 準備画面：種目ごとにたたむ */
 details.pd{border:1px solid var(--line);border-radius:14px;background:var(--surface)}
 details.pd>summary{cursor:pointer;padding:12px 16px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;list-style:none}
@@ -159,7 +171,7 @@ details.pd>.card{border:0;border-radius:0 0 14px 14px}
 </header>
 <main>
   <nav class="tabs" id="tabs" aria-label="画面"></nav>
-  <section id="panel" aria-live="polite"></section>
+  <section id="panel"></section>
 </main>
 
 <div id="stage" hidden>

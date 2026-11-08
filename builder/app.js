@@ -55,7 +55,7 @@ function sampleConfig() {
 function blankConfig() {
   return { name: "新しい大会", teams: [{ name: "チームA", color: "#c0392b" }, { name: "チームB", color: "#1f3a5f" }], teamSize: 4, roster: { A: [], B: [] }, items: [], phases: [] };
 }
-const blankResults = () => ({ order: {}, team: {}, duel: {}, ev: {} });
+const blankResults = () => ({ order: {}, team: {}, duel: {}, ev: {}, absent: {}, used: {} });
 const blankTimer = () => ({ total: 60 * 60000, end: null, paused: null, label: "" });
 
 /* ---------- 状態 ---------- */
@@ -66,8 +66,12 @@ let tab = "play";
 try { tab = localStorage.getItem(LS_TAB) || "play"; } catch (_) {}
 if (!["play", "sum", "setup", "data"].includes(tab)) tab = "play";
 let stageOn = false, stHidden = false, stTimer = true, maxSeen = 0;
+/* 発表画面の状態（開いているか・点数を伏せているか・タイマーを出すか）は端末ごとに覚えておく */
+try { const st = JSON.parse(localStorage.getItem("vsteams-builder-stage") || "{}"); stageOn = !!st.on; stHidden = !!st.hidden; stTimer = st.timer !== false; } catch (_) {}
+function saveStage() { try { localStorage.setItem("vsteams-builder-stage", JSON.stringify({ on: stageOn, hidden: stHidden, timer: stTimer })); } catch (_) {} }
+document.addEventListener("keydown", e => { if (e.key === "Escape" && stageOn && !document.fullscreenElement) { stageOn = false; saveStage(); renderStage(); } });
 /* 当日画面：表示中の種目、開いている卓、同着の入力待ち */
-let cur = null, openT = {}, tieNext = {}, openP = {};
+let cur = null, openT = {}, tieNext = {}, openP = {}, absentMode = {};
 try { cur = localStorage.getItem("vsteams-builder-cur"); } catch (_) {}
 
 /* 読み込んだデータ・共有のデータは信用せず、形と値をそろえる（画面に入れる値を安全にする） */
@@ -113,6 +117,8 @@ function sanitizeResults(R) {
   each(R.order, (k, v) => { out.order[k] = (Array.isArray(v) ? v : []).filter(o => o && (o.t === "A" || o.t === "B")).map(o => ({ t: o.t, i: int(o.i, 0, 0, 30), tie: !!o.tie })); });
   each(R.team, (k, v) => { if (["A", "B", "draw"].includes(v)) out.team[k] = v; });
   each(R.duel, (k, v) => { if (v === "A" || v === "B") out.duel[k] = v; });
+  each(R.absent, (k, v) => { out.absent[k] = (Array.isArray(v) ? v : []).filter(o => o && (o.t === "A" || o.t === "B")).slice(0, 4).map(o => ({ t: o.t, i: int(o.i, 0, 0, 30) })); });
+  each(R.used, (k, v) => { if (v === true) out.used[k] = true; });
   each(R.ev, (k, v) => { out.ev[k] = { A: [], B: [] }; TEAMS.forEach(t => (Array.isArray((v || {})[t]) ? v[t] : []).slice(0, 20).forEach((x, i) => { out.ev[k][t][i] = x == null || x === "" ? null : num(x, null); })); });
   if (R.seats) out.seats = R.seats; if (R.names) out.names = R.names;
   return out;
@@ -148,12 +154,23 @@ const tn = t => esc(doc.config.teams[t === "A" ? 0 : 1].name || ("チーム" + t
 
 /* ---------- 点数の計算 ---------- */
 /* 着順に押した記録（order）から順位を出す。同着は前の人と同じ順位 */
-function rankMap(tb) {
-  const ord = doc.results.order[tb.id] || [], m = { A: [], B: [] };
+/* 欠席の席は「下から2番目の順位に座っていた」ものとして数える（その下の人は1つ下の順位になる）。
+   ほかの人の順位がその位置まで入ったところで、欠席の席に順位が付く */
+const absentOf = tb => doc.results.absent[tb.id] || [];
+function rankSeq(tb, ord = doc.results.order[tb.id] || []) {
+  const abs = absentOf(tb), at = tb.perTeam * 2 - 1 - abs.length;
+  if (!abs.length || ord.length < at) return ord;
+  const rest = ord.slice(at).map((o, k) => k === 0 ? { ...o, tie: false } : o);
+  return [...ord.slice(0, at), ...abs.map(a => ({ t: a.t, i: a.i, tie: false, absent: true })), ...rest];
+}
+function rankMap(tb, ord) {
+  const m = { A: [], B: [], X: [] };
   let rk = 0;
-  ord.forEach((o, k) => { if (!(o.tie && k > 0)) rk = k + 1; if (m[o.t]) m[o.t][o.i] = rk; });
+  rankSeq(tb, ord).forEach((o, k) => { if (!(o.tie && k > 0)) rk = k + 1; if (m[o.t]) m[o.t][o.i] = rk; });
   return m;
 }
+/* 次に押した人に付く順位 */
+function nextRank(tb) { const ord = doc.results.order[tb.id] || []; return rankMap(tb, [...ord, { t: "X", i: 0, tie: !!tieNext[tb.id] && ord.length > 0 }]).X[0]; }
 function indivRes(tb) {
   const R = rankMap(tb), total = tb.perTeam * 2, pts = tb.points || [];
   const seats = [];
@@ -220,7 +237,7 @@ function itemsOf(team) {
   doc.config.phases.forEach(ph => (ph.tables || []).forEach(tb => {
     if (tb.kind === "duel" && doc.results.duel[tb.id] === team) {
       const idx = doc.config.items.findIndex(i => i.id === tb.item);
-      list.push({ no: idx >= 0 ? idx + 1 : "？", name: idx >= 0 ? doc.config.items[idx].name : "（アイテム未設定）", from: tb.game || "デュエル卓" });
+      list.push({ no: idx >= 0 ? idx + 1 : "？", name: idx >= 0 ? doc.config.items[idx].name : "（アイテム未設定）", from: tb.game || "デュエル卓", key: tb.id, used: !!doc.results.used[tb.id] });
     }
   }));
   return list.sort((a, b) => (typeof a.no === "number" ? a.no : 999) - (typeof b.no === "number" ? b.no : 999));
@@ -350,15 +367,16 @@ function tableCard(tb) {
       <span class="tname">${done ? "✓ " : ""}${esc(tb.game || "（ゲーム名なし）")}</span><span class="tsum">${sumTxt}</span><span class="hint">${KIND_LABEL[tb.kind]}・${tb.perTeam}対${tb.perTeam}</span></button>`;
   if (!open) return h + `</article>`;
   if (tb.kind === "indiv") {
-    const rm = rankMap(tb), ord = doc.results.order[tb.id] || [], total = tb.perTeam * 2, n = ord.length;
-    const next = n >= total ? null : (tieNext[tb.id] && n > 0 ? rm[ord[n - 1].t][ord[n - 1].i] : n + 1);
-    h += `<p class="guide">${n >= total ? "全員の順位が入りました。" : `<b>${next}位</b>の人を押してください${tieNext[tb.id] ? "（前の人と同着）" : ""}`}</p><div class="seatgrid">`;
+    const rm = rankMap(tb), ord = doc.results.order[tb.id] || [], abs = absentOf(tb), total = tb.perTeam * 2, n = ord.length, cap = total - abs.length, am = !!absentMode[tb.id];
+    const isAbs = (t, i) => abs.some(a => a.t === t && a.i === i);
+    const guide = am ? "<b>欠席の人</b>を押してください（もう一度押すと取り消し）" : n >= cap ? "全員の順位が入りました。" : `<b>${nextRank(tb)}位</b>の人を押してください${tieNext[tb.id] ? "（前の人と同着）" : ""}`;
+    h += `<p class="guide">${guide}</p><div class="seatgrid">`;
     TEAMS.forEach(t => { for (let i = 0; i < tb.perTeam; i++) {
-      const rk = rm[t][i];
-      h += `<button type="button" class="seat ${t === "A" ? "sa" : "sb"}${rk ? " ranked" : ""}" data-act="pick" data-tb="${tb.id}" data-t="${t}" data-i="${i}"><span class="rk">${rk ? rk + "位" : ""}</span><span class="nm">${esc(nameOf(tb, t, i))}</span><span class="pt">${rk ? fmt(r.seat[t + i]) + "点" : ""}</span></button>`;
+      const rk = rm[t][i], ab = isAbs(t, i);
+      h += `<button type="button" class="seat ${t === "A" ? "sa" : "sb"}${rk ? " ranked" : ""}${ab ? " absent" : ""}" data-act="pick" data-tb="${tb.id}" data-t="${t}" data-i="${i}"><span class="rk">${ab ? "欠席" + (rk ? `（${rk}位扱い）` : "") : rk ? rk + "位" : ""}</span><span class="nm">${esc(nameOf(tb, t, i))}</span><span class="pt">${rk ? fmt(r.seat[t + i]) + "点" : ""}</span></button>`;
     } });
-    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id]}" ${n === 0 || n >= total ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button></div>
-      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。</p>`;
+    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id]}" ${n === 0 || n >= cap || am ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n && !am ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button><button type="button" data-act="absent-mode" data-tb="${tb.id}" aria-pressed="${am}">${am ? "欠席を選び終わる" : "欠席がいる"}</button></div>
+      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。欠席の席は、下から2番目の順位にいたものとして数えます。</p>`;
   } else {
     const cur2 = tb.kind === "team" ? doc.results.team[tb.id] : doc.results.duel[tb.id];
     const opts = [["A", tn("A") + " の勝ち", "sa"], ["B", tn("B") + " の勝ち", "sb"]];
@@ -384,11 +402,22 @@ function partCard(pt, er) {
   }
   return h + `</article>`;
 }
+const STATUS_LABEL = { done: "確定", partial: "入力中", empty: "未入力" };
+/* 初めて開いたときの案内（閉じたら出さない） */
+function welcome() {
+  let seen = false; try { seen = localStorage.getItem("vsteams-builder-welcome") === "1"; } catch (_) {}
+  if (seen) return "";
+  return `<article class="card welcome"><h3>はじめに</h3>
+    <ol><li>「準備」で大会名・チーム・人数を決め、ROUNDと卓（個人戦・チーム戦・デュエル）、全員参加の種目を作る。今は見本（2026年10月の八人の盤士杯）が入っています。</li>
+    <li>当日はこの「当日」画面で、ROUNDを選んで結果を押していく。順位は1位の人から順に押すだけです。</li>
+    <li>「集計」の「発表画面を開く」で、プロジェクターに合計点とタイマーを映す。</li></ol>
+    <div class="row"><button type="button" class="primary" data-act="welcome-blank">白紙から自分の大会を作る</button><button type="button" data-act="welcome-close">見本のまま試してみる</button></div></article>`;
+}
 function renderPlay() {
   const c = doc.config;
   if (!c.phases.length) return '<p class="hint">まだ大会の中身がありません。「準備」でROUNDや種目を作ってください。</p>';
   const pi = curPhase(), ph = c.phases[pi], pr = phaseRes(ph);
-  let h = `<nav class="pills" aria-label="種目">${c.phases.map((p, i) => { const s = phaseRes(p).status; return `<button type="button" data-act="phase" data-i="${i}" aria-pressed="${i === pi}"><span class="dot ${s}"></span>${esc(p.name)}</button>`; }).join("")}</nav>
+  let h = welcome() + `<nav class="pills" aria-label="種目">${c.phases.map((p, i) => { const s = phaseRes(p).status; return `<button type="button" data-act="phase" data-i="${i}" aria-pressed="${i === pi}" title="${STATUS_LABEL[s]}"><span class="dot ${s}" aria-hidden="true"></span>${esc(p.name)}<span class="sr">（${STATUS_LABEL[s]}）</span></button>`; }).join("")}</nav>
     <div class="row between"><h2>${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h2><div class="row">${chip(pr.status)}<b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b><button type="button" data-act="st-open">発表画面</button></div></div>
     ${timerBar(ph)}`;
   if (ph.type === "round") {
@@ -406,7 +435,7 @@ function renderPlay() {
 function renderSum() {
   const t = totals();
   const rows = doc.config.phases.map(ph => { const r = phaseRes(ph); return `<tr><td>${esc(ph.name)}</td><td>${chip(r.status)}</td><td class="pt ta">${fmt(r.pts.A)}</td><td class="pt tb">${fmt(r.pts.B)}</td></tr>`; }).join("");
-  const items = team => { const l = itemsOf(team); return `<article class="card"><h3><span class="${team === "A" ? "ta" : "tb"}">${tn(team)}</span> のアイテム（${l.length}個）</h3>${l.length ? `<ul style="margin:0;padding-left:18px">${l.map(x => `<li>${x.no}　${esc(x.name)} <span class="hint">（${esc(x.from)}）</span></li>`).join("")}</ul>` : '<p class="hint" style="margin:0">まだありません。</p>'}</article>`; };
+  const items = team => { const l = itemsOf(team), left = l.filter(x => !x.used).length; return `<article class="card"><h3><span class="${team === "A" ? "ta" : "tb"}">${tn(team)}</span> のアイテム（残り${left}個／${l.length}個）</h3>${l.length ? l.map(x => `<div class="itemrow${x.used ? " used" : ""}"><span><span class="nm">${x.no}　${esc(x.name)}</span> <span class="hint">（${esc(x.from)}）</span></span><button type="button" class="small" data-act="use-item" data-tb="${x.key}" aria-pressed="${x.used}">${x.used ? "使用済み" : "使った"}</button></div>`).join("") : '<p class="hint" style="margin:0">まだありません。</p>'}</article>`; };
   return `<h2>集計</h2><article class="card"><div class="scroll"><table class="seats"><tr><th>種目</th><th></th><th class="ta">${tn("A")}</th><th class="tb">${tn("B")}</th></tr>${rows}<tr><th>合計</th><th></th><th class="pt ta">${fmt(t.A)}</th><th class="pt tb">${fmt(t.B)}</th></tr></table></div>
   <div class="row"><button type="button" class="primary" data-act="st-open">発表画面を開く</button><button type="button" data-act="copy">結果を文字でコピー</button><span class="hint" id="copymsg"></span></div></article>
   <div class="grid">${items("A")}${items("B")}</div>`;
@@ -459,7 +488,7 @@ function renderStage() {
   $("stNA").style.color = light(doc.config.teams[0].color); $("stNB").style.color = light(doc.config.teams[1].color);
   $("stSA").textContent = stHidden ? "?" : fmt(t.A); $("stSB").textContent = stHidden ? "?" : fmt(t.B);
   $("stLead").textContent = stHidden ? "" : t.A === t.B ? "同点" : `${fmt(Math.abs(t.A - t.B))}点差`;
-  ["A", "B"].forEach(tm => { const l = itemsOf(tm); $("stI" + tm).innerHTML = l.length ? l.map(x => `<span class="ib">${x.no}</span>`).join("") + `<span>アイテム ${l.length}個</span>` : ""; });
+  ["A", "B"].forEach(tm => { const l = itemsOf(tm); $("stI" + tm).innerHTML = l.length ? l.map(x => `<span class="ib${x.used ? " used" : ""}">${x.no}</span>`).join("") + `<span>アイテム 残り${l.filter(x => !x.used).length}個</span>` : ""; });
   $("stBreak").innerHTML = phases.map((ph, i) => { const r = res[i], m = Math.max(r.pts.A, r.pts.B, 1), h = stHidden;
     return `<div class="st-row"><span class="v va" style="color:${light(doc.config.teams[0].color)}">${h ? "–" : fmt(r.pts.A)}</span><span class="sbar a"><i style="width:${h ? 0 : r.pts.A / m * 100}%;background:${doc.config.teams[0].color}"></i></span><span class="lab">${esc(ph.name)}</span><span class="sbar"><i style="width:${h ? 0 : r.pts.B / m * 100}%;background:${light(doc.config.teams[1].color)}"></i></span><span class="v" style="color:${light(doc.config.teams[1].color)}">${h ? "–" : fmt(r.pts.B)}</span></div>`; }).join("");
   st.classList.toggle("no-timer", !stTimer);
@@ -495,7 +524,7 @@ const markR = key => { doc.rts[key] = stamp(); };
 function rKeyOf(path) { const k = path.split("."); if (k[0] !== "results") return null; return k[1] === "ev" ? `ev|${k[2]}|${k[3]}|${k[4]}` : `${k[1]}|${k[2]}`; }
 function allRKeys(R) {
   const ks = new Set(Object.keys(doc.rts));
-  Object.keys(R.order).forEach(id => ks.add("order|" + id)); Object.keys(R.team).forEach(id => ks.add("team|" + id)); Object.keys(R.duel).forEach(id => ks.add("duel|" + id));
+  ["order", "team", "duel", "absent", "used"].forEach(g => Object.keys(R[g] || {}).forEach(id => ks.add(g + "|" + id)));
   Object.keys(R.ev).forEach(id => TEAMS.forEach(t => (R.ev[id][t] || []).forEach((_, k) => ks.add(`ev|${id}|${t}|${k}`))));
   return [...ks];
 }
@@ -507,8 +536,11 @@ function adjustTable(tb, old) {
   tb.perTeam = Math.max(1, Math.min(10, Math.round(Number(tb.perTeam) || 1)));
   const n = tb.perTeam * 2, oldPreset = JSON.stringify(presetFor(old.perTeam * 2));
   if (tb.kind === "indiv" && (tb.points || []).length !== n && (!(tb.points || []).length || JSON.stringify(tb.points) === oldPreset)) tb.points = presetFor(n);
-  if (tb.kind !== old.kind) { delete doc.results.order[tb.id]; delete doc.results.team[tb.id]; delete doc.results.duel[tb.id]; ["order", "team", "duel"].forEach(k => markR(k + "|" + tb.id)); }
-  else if (tb.perTeam < old.perTeam && doc.results.order[tb.id]) { doc.results.order[tb.id] = fixTies(doc.results.order[tb.id].filter(o => o.i < tb.perTeam)); markR("order|" + tb.id); }
+  if (tb.kind !== old.kind) { ["order", "team", "duel", "absent"].forEach(k => { delete doc.results[k][tb.id]; markR(k + "|" + tb.id); }); }
+  else if (tb.perTeam < old.perTeam) {
+    if (doc.results.order[tb.id]) { doc.results.order[tb.id] = fixTies(doc.results.order[tb.id].filter(o => o.i < tb.perTeam)); markR("order|" + tb.id); }
+    if (doc.results.absent[tb.id]) { doc.results.absent[tb.id] = doc.results.absent[tb.id].filter(o => o.i < tb.perTeam); markR("absent|" + tb.id); }
+  }
 }
 const fixTies = ord => { if (ord[0]) ord[0].tie = false; return ord; };
 function onBind(el, final) {
@@ -594,25 +626,43 @@ document.addEventListener("click", async e => {
       const id = b.dataset.tb, t = b.dataset.t, k = Number(b.dataset.i), tb = findTable(id);
       const ord = doc.results.order[id] = doc.results.order[id] || [];
       const at = ord.findIndex(o => o.t === t && o.i === k);
+      if (absentMode[id]) {
+        /* 欠席の席を付け外し。順位が付いていた人なら順位も消す */
+        const abs = doc.results.absent[id] = absentOf(tb).slice(), ai = abs.findIndex(a => a.t === t && a.i === k);
+        if (ai >= 0) abs.splice(ai, 1); else if (abs.length < 1) abs.push({ t, i: k }); else { flash("欠席にできるのは1卓に1人までです。"); break; }
+        if (at >= 0) { const gone = ord.splice(at, 1)[0]; if (ord[at] && ord[at].tie) ord[at].tie = at > 0 && gone.tie; fixTies(ord); markR("order|" + id); }
+        markR("absent|" + id); changed(true); break;
+      }
+      if (absentOf(tb).some(a => a.t === t && a.i === k)) { flash("欠席の席です。取り消すときは「欠席がいる」を押してから押してください。"); break; }
       /* 消した人と同着だった次の人は、消した人の立場（前と同着かどうか）を引き継ぐ */
       if (at >= 0) { const gone = ord.splice(at, 1)[0]; if (ord[at] && ord[at].tie) ord[at].tie = at > 0 && gone.tie; fixTies(ord); }
-      else if (ord.length < tb.perTeam * 2) { ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 }); tieNext[id] = false; }
+      else if (ord.length < tb.perTeam * 2 - absentOf(tb).length) { ord.push({ t, i: k, tie: !!tieNext[id] && ord.length > 0 }); tieNext[id] = false; }
       markR("order|" + id); changed(true); break;
     }
+    case "absent-mode": absentMode[b.dataset.tb] = !absentMode[b.dataset.tb]; tieNext[b.dataset.tb] = false; renderPanel(); break;
     case "tie": tieNext[b.dataset.tb] = !tieNext[b.dataset.tb]; renderPanel(); break;
     case "undo-rank": { const ord = doc.results.order[b.dataset.tb] || []; ord.pop(); tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break; }
     case "clear-rank": if (!sure(b, "本当にやり直す")) break; doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break;
     case "win": { const box = b.dataset.k === "team" ? doc.results.team : doc.results.duel, v = b.dataset.v; if (box[b.dataset.tb] === v) delete box[b.dataset.tb]; else box[b.dataset.tb] = v; markR(b.dataset.k + "|" + b.dataset.tb); changed(true); break; }
     case "num": {
       const { pt, t, k } = b.dataset, v = Number(b.dataset.v), path = `results.ev.${pt}.${t}.${k}`;
-      setPath(path, getPath(path) === v ? null : v); markR(`ev|${pt}|${t}|${k}`);
+      const off = getPath(path) === v;
+      setPath(path, off ? null : v); markR(`ev|${pt}|${t}|${k}`);
+      /* 先着を取り消したら、自動で0点にしたもう一方も空に戻す */
+      if (b.dataset.first && off && v > 0 && getPath(`results.ev.${pt}.${other(t)}.${k}`) === 0) { setPath(`results.ev.${pt}.${other(t)}.${k}`, null); markR(`ev|${pt}|${other(t)}|${k}`); }
       if (b.dataset.first && v > 0 && getPath(path) === v) { setPath(`results.ev.${pt}.${other(t)}.${k}`, 0); markR(`ev|${pt}|${other(t)}|${k}`); }
       changed(true); break;
     }
-    case "st-open": stageOn = true; renderStage(); tick(true); break;
-    case "st-close": stageOn = false; try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (_) {} renderStage(); break;
-    case "st-hide": stHidden = !stHidden; renderStage(); break;
-    case "st-timer": stTimer = !stTimer; renderStage(); break;
+    case "st-open": stageOn = true; saveStage(); renderStage(); tick(true); break;
+    case "st-close": stageOn = false; saveStage(); try { if (document.fullscreenElement) await document.exitFullscreen(); } catch (_) {} renderStage(); break;
+    case "st-hide": stHidden = !stHidden; saveStage(); renderStage(); break;
+    case "st-timer": stTimer = !stTimer; saveStage(); renderStage(); break;
+    case "use-item": { const k = b.dataset.tb; if (doc.results.used[k]) delete doc.results.used[k]; else doc.results.used[k] = true; markR("used|" + k); changed(true); break; }
+    case "welcome-close": case "welcome-blank":
+      try { localStorage.setItem("vsteams-builder-welcome", "1"); } catch (_) {}
+      if (a === "welcome-blank") { snapshot("白紙にしました"); const before = doc.results; doc.config = blankConfig(); doc.results = blankResults(); markC(); markAllR(before); tab = "setup"; try { localStorage.setItem(LS_TAB, tab); } catch (_) {} changed(true); renderTabs(); }
+      else renderPanel();
+      break;
     case "st-full": try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch (_) {} break;
     case "copy": {
       const t = totals(), lines = [`${c.name}　${c.teams[0].name} ${fmt(t.A)} − ${fmt(t.B)} ${c.teams[1].name}`, ...c.phases.map(ph => { const r = phaseRes(ph); return `・${ph.name}：${fmt(r.pts.A)} − ${fmt(r.pts.B)}`; })];
