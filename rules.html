@@ -1,0 +1,247 @@
+<title>VS TEAMS LEAGUE 大会規約</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Noto+Sans+JP:wght@400;500;700&family=Oswald:wght@500;600&display=swap">
+<style>
+/* Layout: 告知スライドと同じ紺と金。規約らしく「第○条」で区切った1カラムの読み物、上に会期とポイントの要約 */
+:root {
+  --bg: #f6f3ec;
+  --paper: #fffdf8;
+  --ink: #14203f;
+  --muted: #56607a;
+  --line: #ddd6c6;
+  --gold: #9a6b14;
+  --navy: #13234a;
+  --navy-ink: #f6f3ec;
+  --t1: #2f6fd6; --t2: #d8424a; --t3: #b8862a; --t4: #2f9b70;
+  --minus: #b23a3a;
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-label: "Oswald", "Arial Narrow", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1530; --paper: #12214a; --ink: #f1ede3; --muted: #a9b5cf; --line: #263a66; --gold: #e2b867;
+    --navy: #1b2d5c; --navy-ink: #f6f3ec; --t1: #6fa3ff; --t2: #ff6f75; --t3: #e6c27a; --t4: #5fd6a3; --minus: #ff9a9e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1530; --paper: #12214a; --ink: #f1ede3; --muted: #a9b5cf; --line: #263a66; --gold: #e2b867;
+  --navy: #1b2d5c; --navy-ink: #f6f3ec; --t1: #6fa3ff; --t2: #ff6f75; --t3: #e6c27a; --t4: #5fd6a3; --minus: #ff9a9e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.85;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+a { color: var(--t1); }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.stripe { display: grid; grid-template-columns: repeat(4, 1fr); height: 8px; margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px))); }
+.stripe i:nth-child(1) { background: var(--t1); } .stripe i:nth-child(2) { background: var(--t2); }
+.stripe i:nth-child(3) { background: var(--t3); } .stripe i:nth-child(4) { background: var(--t4); }
+
+header { display: grid; gap: 14px; padding-top: 40px; }
+.eyebrow { font-family: var(--font-label); font-size: 14px; letter-spacing: .3em; color: var(--gold); text-transform: uppercase; }
+h1 { font-family: var(--font-label); font-weight: 600; font-size: clamp(40px, 9vw, 64px); line-height: 1; letter-spacing: .06em; }
+header .sub { font-family: var(--font-display); font-weight: 800; font-size: clamp(20px, 4vw, 26px); letter-spacing: .08em; }
+header p.lead { margin: 0; color: var(--muted); }
+
+.summary { background: var(--navy); color: var(--navy-ink); border-radius: 14px; padding: 22px 24px; display: grid; gap: 18px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 24px; }
+.facts div { display: grid; gap: 2px; min-width: 0; }
+.facts dt { font-size: 12px; letter-spacing: .1em; opacity: .75; }
+.facts dd { margin: 0; font-weight: 700; font-size: 17px; line-height: 1.4; }
+.facts dd .num { font-family: var(--font-label); font-size: 22px; font-weight: 500; letter-spacing: .02em; }
+.pts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.pts div { border: 1px solid rgba(246, 243, 236, .25); border-radius: 10px; padding: 8px 4px; text-align: center; }
+.pts div:first-child { border-color: #e2b867; background: rgba(226, 184, 103, .16); }
+.pts small { display: block; font-size: 13px; opacity: .8; }
+.pts b { font-family: var(--font-label); font-size: 30px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+nav.toc a { font-size: 13px; text-decoration: none; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px; background: var(--paper); }
+nav.toc a:hover { color: var(--ink); border-color: var(--ink); }
+
+article { display: grid; gap: 34px; }
+section.art { display: grid; gap: 12px; scroll-margin-top: 16px; }
+.art h2 { display: flex; align-items: baseline; gap: 14px; font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: .06em; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.art h2 .no { font-size: 15px; color: var(--gold); letter-spacing: .12em; white-space: nowrap; }
+.art ol, .art ul { margin: 0; padding-left: 1.6em; display: grid; gap: 6px; }
+.art ol { list-style: none; counter-reset: cl; padding-left: 0; }
+.art ol > li { counter-increment: cl; display: grid; grid-template-columns: 2.4em 1fr; }
+.art ol > li::before { content: counter(cl) "."; color: var(--muted); font-family: var(--font-label); font-size: 15px; padding-top: .15em; }
+.art ol > li > * { min-width: 0; }
+.art p { margin: 0; }
+.note { font-size: 14px; color: var(--muted); }
+.minus { color: var(--minus); }
+
+.week { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.week div { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.week b { font-family: var(--font-label); font-weight: 600; font-size: 20px; letter-spacing: .06em; color: var(--gold); }
+.week span { font-size: 14px; line-height: 1.5; }
+@media (max-width: 560px) { .week { grid-template-columns: repeat(2, 1fr); } .pts b { font-size: 24px; } }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: .06em; }
+tr:last-child td { border-bottom: 0; }
+tr.final td:first-child { color: var(--t2); font-weight: 700; }
+.blank { display: inline-block; min-width: 4em; border-bottom: 1px dashed var(--muted); text-align: center; }
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+
+<div class="stripe" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">VS TEAMS · Board Game Arena</div>
+    <h1>VS TEAMS LEAGUE</h1>
+    <div class="sub">大会規約（第1回）</div>
+    <p class="lead">4人1組の4チームで、ボードゲームアリーナ（BGA）のターン制を使って10週間戦うチームリーグです。参加する人は、開幕までにひととおり読んでおいてください。</p>
+  </header>
+
+  <section class="summary" aria-label="大会の要点">
+    <dl class="facts">
+      <div><dt>会期</dt><dd><span class="num">2027.1.4 – 3.14</span></dd></div>
+      <div><dt>形式</dt><dd>4チーム × 4人</dd></div>
+      <div><dt>節</dt><dd>レギュラー8節＋ファイナル2節</dd></div>
+      <div><dt>連絡</dt><dd>LINE グループ</dd></div>
+    </dl>
+    <div class="pts" aria-label="着順ポイント">
+      <div><small>1位</small><b>+5</b></div>
+      <div><small>2位</small><b>+1</b></div>
+      <div><small>3位</small><b>−1</b></div>
+      <div><small>4位</small><b>−3</b></div>
+    </div>
+  </section>
+
+  <nav class="toc" aria-label="目次">
+    <a href="#a1">第1条 大会の形式</a><a href="#a2">第2条 チームとエントリー</a><a href="#a3">第3条 1節の進め方</a>
+    <a href="#a4">第4条 ゲームの提案</a><a href="#a5">第5条 オーダー</a><a href="#a6">第6条 対局</a>
+    <a href="#a7">第7条 ポイントと順位</a><a href="#a8">第8条 日程</a><a href="#a9">第9条 結果と発表</a><a href="#a10">第10条 賞品</a>
+  </nav>
+
+  <article>
+    <section class="art" id="a1">
+      <h2><span class="no">第1条</span>大会の形式</h2>
+      <ol>
+        <li><p>4人1組の4チーム、計16人で戦うチームリーグです。</p></li>
+        <li><p>対局はすべてボードゲームアリーナ（BGA）のターン制で行います。各自の空き時間に1手ずつ進めます。</p></li>
+        <li><p>毎節、4つの卓でそれぞれ別のゲームを遊びます。どの卓にも、4チームから1人ずつが座ります。</p></li>
+        <li><p>レギュラーシーズンは8節、そのあと全4チームでファイナルを2節行います。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a2">
+      <h2><span class="no">第2条</span>チームとエントリー</h2>
+      <ol>
+        <li><p>チームは参加者どうしで自由に組みます。1チーム4人です。</p></li>
+        <li><p>全員、BGA のアカウントが必要です（無料で作れます）。</p></li>
+        <li><p>LINE グループで、チーム名・メンバー4人・それぞれの BGA ユーザー名を送ってエントリーします。締切は <span class="blank">12/__</span> です。</p></li>
+        <li><p>補欠や代打は置きません。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a3">
+      <h2><span class="no">第3条</span>1節の進め方</h2>
+      <ol>
+        <li><p>1節は1週間（月曜から日曜）です。次の節の準備は、今の節を遊びながら進めます。</p></li>
+        <li>
+          <div class="week">
+            <div><b>水曜</b><span>次の節のゲーム提案 締切。4ゲームを公開</span></div>
+            <div><b>土曜</b><span>次の節のオーダー 締切（非公開で提出）</span></div>
+            <div><b>月曜</b><span>オーダー公開、節スタート</span></div>
+            <div><b>日曜</b><span>今の節の締切、着順を報告</span></div>
+          </div>
+        </li>
+        <li><p>節が始まったら、各卓でゲームを提案したチームの選手が BGA にターン制の卓を作り、残りの3人を招待します。</p></li>
+        <li><p>締切までに終わらなさそうな卓は延長できます。延長中の卓があっても、次の節は予定どおり始めます。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a4">
+      <h2><span class="no">第4条</span>ゲームの提案</h2>
+      <ol>
+        <li><p>各チームは毎節、ゲームを1つ提案します。提案したゲームの卓は、そのチームの「ホームゲーム」です。</p></li>
+        <li><p>提案できるのは、BGA で4人・ターン制で遊べるゲームです。重さや、プレミアム会員が必要かどうかの制限はありません。</p></li>
+        <li><p>一度使ったゲームは、あとの節では使えません（どのチームも）。</p></li>
+        <li><p>同じ節で提案がかぶった場合は、そのゲームを2卓で遊びます。</p></li>
+        <li><p>ファイナルに限り、それまでに出たゲームをもう一度提案できます。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a5">
+      <h2><span class="no">第5条</span>オーダー</h2>
+      <ol>
+        <li><p>毎節、チームの4人をどの卓（どのゲーム）に出すかを、チームで自由に決めます。全員が毎節どこか1つの卓に出ます。</p></li>
+        <li><p>オーダーは運営に非公開で提出し、節の開始日に全チーム分をまとめて公開します。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a6">
+      <h2><span class="no">第6条</span>対局</h2>
+      <ol>
+        <li><p>チーム内の相談は、対局中も含めて自由です。</p></li>
+        <li><p>持ち時間を過ぎた人がいても、BGA の機能で退出させることはしません。</p></li>
+        <li><p>どうしても対局できない人は、その卓で <b>4位</b> とします。途中で抜けた場合も4位とし、残りの3人は最終的な順位で1〜3位とします。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a7">
+      <h2><span class="no">第7条</span>ポイントと順位</h2>
+      <ol>
+        <li><p>各卓の着順で、1位 <b>+5</b>、2位 <b>+1</b>、3位 <b class="minus">−1</b>、4位 <b class="minus">−3</b> のポイントが入ります。</p></li>
+        <li><p>同着のときは、その着順のポイントを分け合います。例：1位が2人なら、(5＋1)÷2 で <b>+3</b> ずつ。</p></li>
+        <li><p>チームの順位は、メンバー全員のポイントの合計で決めます。</p></li>
+        <li><p>ファイナルには、レギュラーシーズンのポイントを半分にして持ち越します。ファイナル2節のポイントを足した合計で優勝を決めます。</p></li>
+        <li><p>個人の合計ポイントが一番多い人を MVP とします。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a8">
+      <h2><span class="no">第8条</span>日程</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>節</th><th>期間</th><th>ゲーム提案の締切</th><th>オーダーの締切</th></tr></thead>
+          <tbody>
+            <tr><td>第1節</td><td>1/4（月）〜 1/10（日）</td><td>12/30（水）</td><td>1/2（土）</td></tr>
+            <tr><td>第2節</td><td>1/11（月）〜 1/17（日）</td><td>1/6（水）</td><td>1/9（土）</td></tr>
+            <tr><td>第3節</td><td>1/18（月）〜 1/24（日）</td><td>1/13（水）</td><td>1/16（土）</td></tr>
+            <tr><td>第4節</td><td>1/25（月）〜 1/31（日）</td><td>1/20（水）</td><td>1/23（土）</td></tr>
+            <tr><td>第5節</td><td>2/1（月）〜 2/7（日）</td><td>1/27（水）</td><td>1/30（土）</td></tr>
+            <tr><td>第6節</td><td>2/8（月）〜 2/14（日）</td><td>2/3（水）</td><td>2/6（土）</td></tr>
+            <tr><td>第7節</td><td>2/15（月）〜 2/21（日）</td><td>2/10（水）</td><td>2/13（土）</td></tr>
+            <tr><td>第8節</td><td>2/22（月）〜 2/28（日）</td><td>2/17（水）</td><td>2/20（土）</td></tr>
+            <tr class="final"><td>ファイナル 第1節</td><td>3/1（月）〜 3/7（日）</td><td>2/24（水）</td><td>2/27（土）</td></tr>
+            <tr class="final"><td>ファイナル 第2節</td><td>3/8（月）〜 3/14（日）</td><td>3/3（水）</td><td>3/6（土）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="art" id="a9">
+      <h2><span class="no">第9条</span>結果と発表</h2>
+      <ol>
+        <li><p>対局が終わったら、各卓の着順を LINE グループで報告してください。BGA の卓の URL もあると助かります。</p></li>
+        <li><p>節ごとの結果は、発表スライドで LINE グループに共有し、SNS にも投稿します。</p></li>
+        <li><p>対局の実況動画を作ります。BGA のリプレイを使い、できるだけ全卓を取り上げる予定です。</p></li>
+        <li><p>SNS や動画には、表示名・チーム名・BGA の対局画面が出ます。載せてほしくない人は、エントリーのときに運営に伝えてください。</p></li>
+      </ol>
+    </section>
+
+    <section class="art" id="a10">
+      <h2><span class="no">第10条</span>賞品</h2>
+      <ol>
+        <li><p>優勝チームなどに賞品を用意します。内容は後日発表します。</p></li>
+      </ol>
+    </section>
+  </article>
+
+  <footer>この規約は第1回大会のものです。運営が変更する場合は、LINE グループでお知らせします。</footer>
+</div>
