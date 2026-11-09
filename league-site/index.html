@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VS TEAMS LEAGUE</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@500;600&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+<style>
+/* Layout: 墨色の看板 → チームカード4枚（主役）→ 順位推移 → MVP → 節ごとの結果。告知チラシと同じ生成り×墨×4色 */
+:root {
+  --paper: #F1ECE2;
+  --card: #FBF8F2;
+  --ink: #16161A;
+  --muted: #5E5A52;
+  --line: #D9D1C2;
+  --plus: #1E7A4F;
+  --minus: #B4382A;
+  --gold: #B8860B;
+  --font-display: "Anton", "Oswald", "Arial Narrow", sans-serif;
+  --font-num: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121214; --card: #1B1B1F; --ink: #F1ECE2; --muted: #A9A398; --line: #2E2D31;
+    --plus: #5FCB93; --minus: #F08A7B; --gold: #E8B84A; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121214; --card: #1B1B1F; --ink: #F1ECE2; --muted: #A9A398; --line: #2E2D31;
+  --plus: #5FCB93; --minus: #F08A7B; --gold: #E8B84A; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 44px; }
+.wrap > *, .teams > *, .mvp-row > * { min-width: 0; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.plus { color: var(--plus); } .minus { color: var(--minus); }
+
+/* 看板 */
+.board { margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px))); background: #16161A; color: #F1ECE2; }
+.board-in { max-width: 1080px; margin: 0 auto; padding: 36px max(16px, env(safe-area-inset-right, 0px)) 28px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 14px; }
+.eyebrow { font-family: var(--font-num); letter-spacing: .28em; font-size: 12px; color: #B9B2A5; text-transform: uppercase; }
+.board h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(44px, 10vw, 96px); line-height: .95; letter-spacing: .01em; }
+.status { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; font-size: 14px; color: #D8D1C4; }
+.status b { font-family: var(--font-num); font-size: 22px; color: #F1ECE2; font-weight: 600; letter-spacing: .02em; }
+.stripe { display: grid; grid-template-columns: repeat(4, 1fr); height: 10px; }
+.sample { background: #F0B323; color: #16161A; font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 6px; justify-self: start; }
+
+.sec-h { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; border-bottom: 3px solid var(--ink); padding-bottom: 8px; margin-bottom: 18px; }
+.sec-h h2 { font-family: var(--font-display); font-weight: 400; font-size: 34px; letter-spacing: .02em; line-height: 1; }
+.sec-h small { color: var(--muted); font-size: 13px; }
+
+/* チームカード */
+.teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 720px) { .teams { grid-template-columns: 1fr; } }
+.team { background: var(--card); border-radius: 18px; overflow: hidden; display: grid; border: 1px solid var(--line); }
+.team-top { background: var(--tc); color: #fff; padding: 18px 22px 16px; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 16px; align-items: end; position: relative; }
+.rank { font-family: var(--font-display); font-size: 76px; line-height: .85; }
+.rank sup { font-size: 24px; vertical-align: top; margin-left: 2px; }
+.tname { font-weight: 900; font-size: 22px; line-height: 1.2; align-self: end; padding-bottom: 6px; min-width: 0; overflow-wrap: anywhere; }
+.tname small { display: block; font-weight: 500; font-size: 12px; opacity: .85; letter-spacing: .06em; }
+.total { font-family: var(--font-display); font-size: 64px; line-height: .9; text-align: right; }
+.total small { display: block; font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: .1em; opacity: .85; }
+.team-body { padding: 16px 22px 20px; display: grid; gap: 14px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { display: grid; gap: 0; }
+.stat span { font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+.stat b { font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1.15; }
+.bars { display: flex; align-items: center; gap: 4px; height: 56px; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); position: relative; }
+.bars::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--line); }
+.bar { flex: 1; height: 100%; position: relative; }
+.bar i { position: absolute; left: 12%; right: 12%; background: var(--tc); border-radius: 3px; z-index: 1; }
+.bar.empty i { background: var(--line); }
+.bars-l { display: flex; gap: 4px; font-size: 10px; color: var(--muted); font-family: var(--font-num); margin-top: -8px; }
+.bars-l span { flex: 1; text-align: center; }
+.members { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.member { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; border-bottom: 1px solid var(--line); padding-bottom: 4px; min-width: 0; }
+.member span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .num { font-weight: 600; }
+
+/* 順位推移 */
+.chart-box { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px 10px; overflow-x: auto; }
+.chart-box svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 8px 10px 0; font-size: 13px; }
+.legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; background: var(--tc); vertical-align: middle; margin-right: 6px; }
+
+/* MVP */
+.mvp-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; }
+@media (max-width: 720px) { .mvp-row { grid-template-columns: 1fr; } }
+.mvp { background: var(--ink); color: var(--paper); border-radius: 18px; padding: 22px; display: grid; gap: 8px; align-content: start; position: relative; overflow: hidden; }
+.mvp::before { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: var(--tc); opacity: .9; }
+.mvp .lab { font-family: var(--font-num); letter-spacing: .28em; font-size: 12px; color: var(--gold); position: relative; }
+.mvp .who { font-weight: 900; font-size: 30px; line-height: 1.2; position: relative; overflow-wrap: anywhere; }
+.mvp .team-of { font-size: 13px; opacity: .8; position: relative; }
+.mvp .big { font-family: var(--font-display); font-size: 72px; line-height: 1; position: relative; }
+.mvp .sub { font-size: 13px; opacity: .85; position: relative; }
+.rank-table { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+td.n, th.n { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--tc); margin-right: 8px; vertical-align: 0; }
+
+/* 節ごとの結果 */
+.rounds { display: grid; gap: 12px; }
+details.round { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+details.round > summary { cursor: pointer; list-style: none; padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+details.round > summary::-webkit-details-marker { display: none; }
+summary .rl { font-family: var(--font-display); font-size: 24px; line-height: 1; min-width: 5.5em; }
+summary .chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.chip { font-size: 12px; font-family: var(--font-num); padding: 2px 10px; border-radius: 999px; background: var(--tc); color: #fff; }
+summary .open { font-size: 12px; color: var(--muted); }
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; padding: 0 18px 18px; }
+.tbl { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+.tbl h3 { font-size: 15px; font-weight: 900; display: flex; justify-content: space-between; gap: 8px; }
+.tbl h3 a { font-size: 12px; font-weight: 500; color: var(--muted); }
+.seat { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 14px; }
+.seat .p { font-family: var(--font-num); color: var(--muted); }
+.seat .p.first { color: var(--gold); font-weight: 600; }
+.seat .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat .pt { font-family: var(--font-num); font-weight: 600; }
+.note { font-size: 12px; color: var(--muted); }
+.empty { color: var(--muted); padding: 20px; text-align: center; }
+footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<header class="board">
+  <div class="stripe" aria-hidden="true"><i style="background:#2546D8"></i><i style="background:#E2402F"></i><i style="background:#F0B323"></i><i style="background:#1E8C5A"></i></div>
+  <div class="board-in">
+    <div class="eyebrow">Board Game Arena Team League</div>
+    <h1 id="lname">VS TEAMS LEAGUE</h1>
+    <div class="status" id="status">読み込み中…</div>
+    <div class="sample" id="sampleNote" hidden>サンプルデータで表示しています（実際の結果ではありません）</div>
+  </div>
+</header>
+
+<main class="wrap" style="padding-top:36px">
+  <section aria-labelledby="h-teams">
+    <div class="sec-h"><h2 id="h-teams">TEAM STANDINGS</h2><small id="teamsNote"></small></div>
+    <div class="teams" id="teams"></div>
+  </section>
+
+  <section aria-labelledby="h-race">
+    <div class="sec-h"><h2 id="h-race">THE RACE</h2><small>節ごとの累計ポイント</small></div>
+    <div class="chart-box"><div id="chart"></div><div class="legend" id="legend"></div></div>
+  </section>
+
+  <section aria-labelledby="h-mvp">
+    <div class="sec-h"><h2 id="h-mvp">MVP RACE</h2><small>個人の合計ポイント</small></div>
+    <div class="mvp-row"><div id="mvp"></div><div class="rank-table"><div class="scroll" id="players"></div></div></div>
+  </section>
+
+  <section aria-labelledby="h-rounds">
+    <div class="sec-h"><h2 id="h-rounds">MATCHDAYS</h2><small>節ごとの結果（新しい順）</small></div>
+    <div class="rounds" id="rounds"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</main>
+
+<script>
+(() => {
+  const C = window.LEAGUE;
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (n) => { const v = Math.round(n * 10) / 10; return (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(Number.isInteger(v) ? 0 : 1); };
+  const cls = (n) => n > 0.001 ? "plus" : n < -0.001 ? "minus" : "";
+  const ord = (i) => ["1", "2", "3", "4"][i] + ["st", "nd", "rd", "th"][i];
+  const safeUrl = (u) => /^https:\/\/([a-z0-9-]+\.)?boardgamearena\.com\//i.test(u || "") ? u : null;
+
+  const teamOf = new Map();
+  C.teams.forEach((t, i) => t.members.forEach((m) => teamOf.set(m.trim(), i)));
+  const roundIdx = new Map(C.rounds.map((r, i) => [r.label, i]));
+  const isFinal = (ri) => ri >= C.regular;
+
+  // ---------- データ ----------
+  // CSV: Google フォームの回答（節, ゲーム名, 1位, 2位, 3位, 4位, BGAの卓のURL など）。同着は「A・B」のように同じ欄に並べ、次の欄を空ける
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+      else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  function rowsToResults(rows) {
+    const head = rows[0].map((h) => h.trim()); const col = (re) => head.findIndex((h) => re.test(h));
+    const ci = { round: col(/節/), game: col(/ゲーム/), p: [col(/^1位/), col(/^2位/), col(/^3位/), col(/^4位/)], url: col(/URL/i), ts: col(/タイムスタンプ|Timestamp/i) };
+    const latest = new Map();
+    for (const r of rows.slice(1)) {
+      if (!r.some((c) => c.trim())) continue;
+      const res = { round: (r[ci.round] || "").trim(), game: (r[ci.game] || "").trim(), cells: ci.p.map((i) => (i >= 0 ? r[i] || "" : "")), url: ci.url >= 0 ? r[ci.url].trim() : "" };
+      if (!roundIdx.has(res.round) || !res.game) continue;
+      latest.set(res.round + "|" + res.game, res); // 同じ節・同じゲームの報告は最後のものを使う
+    }
+    return [...latest.values()];
+  }
+  function sampleResults() {
+    let seed = 20270104; const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const out = []; let g = 1;
+    for (let ri = 0; ri < 5; ri++) for (let t = 0; t < 4; t++) {
+      const seats = C.teams.map((tm, ti) => ({ n: tm.members[(t + ri + ti) % 4], s: rnd() + (ti === 1 ? 0.12 : ti === 3 ? -0.05 : 0) })).sort((a, b) => b.s - a.s);
+      const cells = seats.map((x) => x.n);
+      if (ri === 2 && t === 1) { cells[0] = cells[0] + "・" + cells[1]; cells[1] = ""; }
+      out.push({ round: C.rounds[ri].label, game: "サンプルゲーム" + String(g++).padStart(2, "0"), cells, url: "" });
+    }
+    return out;
+  }
+
+  // 着順の欄を順位に変換。名前の並んだ欄＝同着で、その分の順位をまとめて占める
+  function placements(cells) {
+    const groups = cells.map((c) => c.split(/[・,、\/／]/).map((s) => s.trim()).filter(Boolean)).filter((g) => g.length);
+    const out = []; let pos = 0;
+    for (const g of groups) {
+      const pts = C.points.slice(pos, pos + g.length); const avg = pts.reduce((a, b) => a + b, 0) / g.length;
+      g.forEach((name) => out.push({ name, place: pos + 1, pts: avg, team: teamOf.has(name) ? teamOf.get(name) : -1 }));
+      pos += g.length;
+    }
+    return out;
+  }
+
+  function compute(results) {
+    const R = C.rounds.length;
+    const teams = C.teams.map((t, i) => ({ ...t, i, reg: 0, fin: 0, firsts: 0, places: 0, games: 0, perRound: Array(R).fill(null) }));
+    const players = new Map(); const unknown = new Set();
+    const tables = results.map((r) => ({ ...r, ri: roundIdx.get(r.round), seats: placements(r.cells) }));
+    for (const tb of tables) for (const s of tb.seats) {
+      if (s.team < 0) { unknown.add(s.name); continue; }
+      const t = teams[s.team];
+      if (isFinal(tb.ri)) t.fin += s.pts; else t.reg += s.pts;
+      t.perRound[tb.ri] = (t.perRound[tb.ri] || 0) + s.pts; t.games++; t.places += s.place; if (s.place === 1) t.firsts++;
+      const p = players.get(s.name) || { name: s.name, team: s.team, pts: 0, games: 0, places: 0, firsts: 0 };
+      p.pts += s.pts; p.games++; p.places += s.place; if (s.place === 1) p.firsts++; players.set(s.name, p);
+    }
+    const played = [...new Set(tables.map((t) => t.ri))].sort((a, b) => a - b);
+    const finalStarted = played.some(isFinal);
+    teams.forEach((t) => { t.total = finalStarted ? t.reg * C.carry + t.fin : t.reg; });
+    const order = [...teams].sort((a, b) => b.total - a.total || b.firsts - a.firsts);
+    const pl = [...players.values()].sort((a, b) => b.pts - a.pts || b.firsts - a.firsts || a.places / a.games - b.places / b.games);
+    return { teams, order, players: pl, tables, played, finalStarted, unknown };
+  }
+
+  // ---------- 描画 ----------
+  function render(D, source) {
+    $("#lname").textContent = C.name;
+    const last = D.played[D.played.length - 1];
+    const now = new Date(); const ri = C.rounds.findIndex((r) => { const s = new Date(r.start + "T00:00:00+09:00"); return now >= s && now < new Date(s.getTime() + 7 * 864e5); });
+    const lastLabel = last != null ? C.rounds[last].label : null;
+    $("#status").innerHTML = [
+      ri >= 0 ? `<span>いま <b>${esc(C.rounds[ri].label)}</b></span>` : `<span>開幕 <b>2027.1.4</b></span>`,
+      lastLabel ? `<span>結果は <b>${esc(lastLabel)}</b> まで</span>` : `<span>まだ結果はありません</span>`,
+      `<span><b>${D.tables.length}</b> 卓</span>`,
+    ].join("");
+    $("#sampleNote").hidden = !C.sample && source !== "sample";
+    $("#teamsNote").textContent = D.finalStarted ? `レギュラーの${C.carry * 100}%を持ち越し＋ファイナル` : "合計ポイント（同点は1位の回数で上位）";
+
+    const maxAbs = Math.max(3, ...D.teams.flatMap((t) => t.perRound.filter((v) => v != null).map(Math.abs)));
+    const shown = C.rounds.map((r, i) => i).filter((i) => i <= Math.max(last ?? 0, C.regular - 1));
+    $("#teams").innerHTML = D.order.map((t, k) => {
+      const recent = last != null ? t.perRound[last] : null;
+      const members = t.members.map((m) => { const p = D.players.find((x) => x.name === m); return `<div class="member"><span>${esc(m)}</span><span class="num ${cls(p ? p.pts : 0)}">${p ? fmt(p.pts) : "―"}</span></div>`; }).join("");
+      const bars = shown.map((i) => { const v = t.perRound[i]; if (v == null) return `<div class="bar empty"><i style="top:49%;height:2%"></i></div>`; const h = Math.abs(v) / maxAbs * 50; return `<div class="bar"><i style="${v >= 0 ? `bottom:50%;height:${h}%` : `top:50%;height:${h}%`}" title="${esc(C.rounds[i].label)} ${fmt(v)}"></i></div>`; }).join("");
+      const labels = shown.map((i) => `<span>${isFinal(i) ? "F" + (i - C.regular + 1) : i + 1}</span>`).join("");
+      return `<article class="team" style="--tc:${t.color}">
+        <div class="team-top"><div class="rank">${k + 1}<sup>${ord(k).slice(1)}</sup></div><div class="tname"><small>TEAM</small>${esc(t.name)}</div><div class="total">${fmt(t.total)}<small>POINTS</small></div></div>
+        <div class="team-body">
+          <div class="stats"><div class="stat"><span>1位の回数</span><b>${t.firsts}</b></div><div class="stat"><span>平均着順</span><b>${t.games ? (t.places / t.games).toFixed(2) : "―"}</b></div><div class="stat"><span>${lastLabel ? esc(lastLabel) : "直近の節"}</span><b class="${cls(recent || 0)}">${recent != null ? fmt(recent) : "―"}</b></div></div>
+          <div><div class="bars" aria-label="節ごとのポイント">${bars}</div><div class="bars-l" aria-hidden="true">${labels}</div></div>
+          <div class="members">${members}</div>
+        </div></article>`;
+    }).join("");
+
+    renderChart(D, shown);
+
+    const top = D.players[0];
+    $("#mvp").innerHTML = top ? `<div class="mvp" style="--tc:${C.teams[top.team].color}"><div class="lab">CURRENT MVP</div><div class="who">${esc(top.name)}</div><div class="team-of">${esc(C.teams[top.team].name)}</div><div class="big ${""}">${fmt(top.pts)}</div><div class="sub">${top.games}局 · 1位 ${top.firsts}回 · 平均着順 ${(top.places / top.games).toFixed(2)}</div></div>` : `<div class="mvp"><div class="lab">CURRENT MVP</div><div class="who">まだいません</div></div>`;
+    $("#players").innerHTML = D.players.length ? `<table><thead><tr><th class="n">#</th><th>選手</th><th>チーム</th><th class="n">局</th><th class="n">1位</th><th class="n">平均着順</th><th class="n">ポイント</th></tr></thead><tbody>${D.players.map((p, i) => `<tr style="--tc:${C.teams[p.team].color}"><td class="n">${i + 1}</td><td><span class="dot"></span>${esc(p.name)}</td><td>${esc(C.teams[p.team].name)}</td><td class="n">${p.games}</td><td class="n">${p.firsts}</td><td class="n">${(p.places / p.games).toFixed(2)}</td><td class="n ${cls(p.pts)}"><b>${fmt(p.pts)}</b></td></tr>`).join("")}</tbody></table>` : `<div class="empty">結果が入ると、ここに個人成績が並びます。</div>`;
+
+    const byRound = [...D.played].reverse();
+    $("#rounds").innerHTML = byRound.length ? byRound.map((ri, k) => {
+      const tabs = D.tables.filter((t) => t.ri === ri);
+      const sums = D.teams.map((t) => ({ t, v: t.perRound[ri] || 0 })).sort((a, b) => b.v - a.v);
+      const chips = sums.map((s) => `<span class="chip" style="--tc:${s.t.color}">${esc(s.t.name)} ${fmt(s.v)}</span>`).join("");
+      const cards = tabs.map((tb) => { const u = safeUrl(tb.url); return `<div class="tbl"><h3><span>${esc(tb.game)}</span>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener">BGA</a>` : ""}</h3>${tb.seats.map((s) => `<div class="seat" style="--tc:${s.team >= 0 ? C.teams[s.team].color : "#999"}"><span class="p ${s.place === 1 ? "first" : ""}">${s.place}位</span><span class="who"><span class="dot"></span>${esc(s.name)}</span><span class="pt ${cls(s.pts)}">${fmt(s.pts)}</span></div>`).join("")}</div>`; }).join("");
+      return `<details class="round" ${k === 0 ? "open" : ""}><summary><span class="rl">${esc(C.rounds[ri].label)}</span><span class="chips">${chips}</span><span class="open">${tabs.length}卓</span></summary><div class="tables">${cards}</div></details>`;
+    }).join("") : `<div class="empty">第1節の結果が入ると、ここに並びます。</div>`;
+
+    const warn = D.unknown.size ? `<p class="note">チームに登録されていない名前があります：${[...D.unknown].map(esc).join("、")}（config.js のメンバー名と結果報告の名前をそろえてください）</p>` : "";
+    $("#foot").innerHTML = `${warn}着順ポイント ${C.points.map(fmt).join(" / ")}。同着はその着順のポイントを分け合います。データ：${source === "sample" ? "サンプル" : "Google フォームの結果報告"}（${new Date().toLocaleString("ja-JP")} に読み込み）`;
+  }
+
+  function renderChart(D, shown) {
+    const W = 900, H = 340, L = 48, Rr = 110, T = 20, B = 36;
+    const cum = D.teams.map((t) => { let s = 0; return shown.map((i) => { if (t.perRound[i] == null && i > (D.played[D.played.length - 1] ?? -1)) return null; s += t.perRound[i] || 0; return s; }); });
+    const vals = cum.flat().filter((v) => v != null); const lo = Math.min(0, ...vals), hi = Math.max(1, ...vals);
+    const pad = (hi - lo) * 0.1 || 1; const y0 = lo - pad, y1 = hi + pad;
+    const x = (k) => L + (W - L - Rr) * (shown.length > 1 ? k / (shown.length - 1) : 0.5);
+    const y = (v) => T + (H - T - B) * (1 - (v - y0) / (y1 - y0));
+    const step = Math.max(1, Math.ceil((y1 - y0) / 6 / 5) * 5);
+    let grid = ""; for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) grid += `<line x1="${L}" x2="${W - Rr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v === 0 ? 2 : 1}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Oswald, sans-serif">${v > 0 ? "+" + v : v}</text>`;
+    const xl = shown.map((i, k) => `<text x="${x(k)}" y="${H - 12}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="Oswald, sans-serif">${isFinal(i) ? "F" + (i - C.regular + 1) : i + 1}</text>`).join("");
+    const ends = [];
+    const lines = cum.map((pts, ti) => {
+      const p = pts.map((v, k) => v == null ? null : [x(k), y(v)]).filter(Boolean); if (!p.length) return "";
+      const last = p[p.length - 1]; ends.push({ ti, yy: last[1], xx: last[0], v: pts.filter((v) => v != null).pop() });
+      const col = C.teams[ti].color;
+      return `<polyline points="${p.map((q) => q.join(",")).join(" ")}" fill="none" stroke="${col}" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>${p.map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="${col}"/>`).join("")}`;
+    }).join("");
+    ends.sort((a, b) => a.yy - b.yy); for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 18) ends[i].yy = ends[i - 1].yy + 18;
+    const labels = ends.map((e) => `<circle cx="${e.xx}" cy="${y(e.v)}" r="7" fill="${C.teams[e.ti].color}" stroke="var(--card)" stroke-width="3"/><text x="${e.xx + 14}" y="${e.yy + 5}" font-size="14" font-weight="700" fill="${C.teams[e.ti].color}" font-family="Zen Kaku Gothic New, sans-serif">${esc(C.teams[e.ti].name)} ${fmt(e.v)}</text>`).join("");
+    $("#chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="各チームの累計ポイントの推移">${grid}${xl}${lines}${labels}</svg>`;
+    $("#legend").innerHTML = C.teams.map((t) => `<span style="--tc:${t.color}"><i></i>${esc(t.name)}</span>`).join("");
+  }
+
+  async function start() {
+    let results, source = "sheet";
+    if (C.csvUrl) {
+      try { const r = await fetch(C.csvUrl, { cache: "no-store" }); if (!r.ok) throw new Error(r.status); results = rowsToResults(parseCSV(await r.text())); }
+      catch (e) { $("#status").textContent = "結果を読み込めませんでした。少し時間をおいて開き直してください。"; return; }
+    } else { results = sampleResults(); source = "sample"; }
+    render(compute(results), source);
+  }
+  start();
+})();
+</script>
+</body>
+</html>
