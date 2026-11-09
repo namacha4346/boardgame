@@ -65,7 +65,12 @@ h3{font-size:16px;margin:0}
 .warn{border:1px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:8px 12px;font-size:14px}
 .phase{border-left:6px solid var(--gold)}
 .phase.event{border-left-color:var(--ok)}
-.tbl{border:1px dashed var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+/* 準備：卓・項目は1行の要約。押すと開く */
+details.tbl{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+details.tbl>summary{cursor:pointer;padding:10px 12px;display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline;list-style:none}
+details.tbl>summary::-webkit-details-marker{display:none}
+details.tbl>summary::before{content:"▸";color:var(--muted)}details.tbl[open]>summary::before{content:"▾"}
+.tbl-in{padding:0 12px 12px;display:flex;flex-direction:column;gap:8px}
 table.seats{width:100%;border-collapse:collapse;font-size:14px}
 table.seats th,table.seats td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:middle}
 table.seats td.pt{font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
@@ -75,12 +80,34 @@ table.seats td.pt{font-variant-numeric:tabular-nums;font-weight:700;text-align:r
 .ta{color:var(--ta-t)}.tb{color:var(--tb-t)}
 textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:12px}
 /* 当日画面 */
-.pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
 .pills button{position:relative;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:999px}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
 .dot.partial{background:var(--gold)}.dot.done{background:var(--ok)}
-.tbar{padding:10px 14px}
-.tbig{font-family:var(--display);font-size:clamp(26px,5vw,38px);line-height:1;font-variant-numeric:tabular-nums}
+/* ROUNDの見出し・点・タイマー・発表画面を1つの帯に */
+#panel{display:flex;flex-direction:column;gap:12px}
+.phead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.ptitle{display:flex;gap:14px;align-items:baseline;flex:1 1 auto;justify-content:space-between}
+.ptitle h2{margin:0}
+.pctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tbig{white-space:nowrap}
+.psum{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 6px 4px 12px}
+.tlab{font-size:12px;color:var(--muted);max-width:8em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tbig{font-family:var(--display);font-size:24px;line-height:1;font-variant-numeric:tabular-nums}
+.tend{white-space:nowrap}
+.pctl button,.tbar button{white-space:nowrap}
+@media (max-width:640px){.ptitle,.pctl{flex-basis:100%}.tbar{flex:1 1 auto;min-width:0}.tend,.tlab{display:none}}
+@media (min-width:641px){.ptitle{justify-content:flex-start}}
+/* 「…」のメニュー */
+details.more{position:relative}
+details.more>summary{list-style:none;cursor:pointer;min-width:44px;min-height:40px;display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-weight:700;letter-spacing:.1em}
+details.more>summary::-webkit-details-marker{display:none}
+details.more[open]>summary{background:var(--fg);color:var(--bg)}
+details.more .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:15em;max-width:min(22em,86vw);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+details.more .menu button{text-align:left}
+details.more .menu .hint{margin:2px 4px 0}
+.tact{min-height:40px}.tact details.more{margin-left:auto}
 .tcard{gap:8px}
 .tcard.done{opacity:.85}
 .thead{all:unset;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline}
@@ -91,30 +118,39 @@ textarea{width:100%;min-height:8em;font-family:ui-monospace,monospace;font-size:
 .tcard.done .tname{color:var(--ok)}
 .guide{margin:0;font-size:15px}
 .seatgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
-.seat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:68px;padding:8px 10px;border-width:2px;text-align:left}
-.seat.sa{border-color:color-mix(in srgb,var(--ta-t) 70%,transparent)}.seat.sb{border-color:color-mix(in srgb,var(--tb-t) 70%,transparent)}
-.seat .rk{font-family:var(--display);font-size:18px;min-height:1.2em;line-height:1.2}
-.seat .nm{font-weight:700;overflow-wrap:anywhere}
-.seat .pt{font-size:12px;color:var(--muted)}
-.seat.ranked.sa{background:color-mix(in srgb,var(--ta) 16%,var(--surface))}.seat.ranked.sb{background:color-mix(in srgb,var(--tb) 16%,var(--surface))}
+/* 席：押せるボタンに見えるように、チームの色をうすく塗って影を付ける。名前を主役に */
+.seat{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"rk pt" "nm nm";align-items:center;gap:2px 6px;min-height:64px;padding:8px 12px;border-width:2px;text-align:left;box-shadow:0 2px 0 var(--line);transition:transform .05s}
+.seat:active{transform:translateY(2px);box-shadow:none}
+.seat.sa{border-color:color-mix(in srgb,var(--ta-t) 70%,transparent);background:color-mix(in srgb,var(--ta) 7%,var(--surface))}.seat.sb{border-color:color-mix(in srgb,var(--tb-t) 70%,transparent);background:color-mix(in srgb,var(--tb) 7%,var(--surface))}
+.seat .rk{grid-area:rk;font-family:var(--display);font-size:16px;line-height:1.2}
+.seat .rk:empty{display:none}
+.seat .nm{grid-area:nm;font-weight:700;font-size:17px;overflow-wrap:anywhere}
+.seat .pt{grid-area:pt;font-size:12px;color:var(--muted);text-align:right}
+.seat.ranked.sa{background:var(--ta);color:#fff;border-color:var(--ta)}.seat.ranked.sb{background:var(--tb);color:#fff;border-color:var(--tb)}
+.seat.ranked .pt{color:inherit;opacity:.85}
 .winrow{display:flex;gap:8px;flex-wrap:wrap}
 .win{flex:1 1 140px;min-height:56px;font-weight:700;border-width:2px}
 .win.sa{border-color:var(--ta-t)}.win.sb{border-color:var(--tb-t)}
 .win[aria-pressed="true"].sa{background:var(--ta);color:#fff}.win[aria-pressed="true"].sb{background:var(--tb);color:#fff}
 .qlabel{font-size:13px;font-weight:700;color:var(--muted);border-top:1px solid var(--line);padding-top:6px}
-.numrow{display:grid;grid-template-columns:7em minmax(0,1fr) 3.5em;gap:8px;align-items:center}
+/* 種目：1問ぶんの両チームを横に並べる（狭い画面では縦） */
+.qpair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:8px 20px}
+.numrow{display:flex;flex-direction:column;gap:4px;min-width:0}
+.nhead{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .nteam{font-weight:700;font-size:13px;overflow-wrap:anywhere}
 .nums{display:flex;flex-wrap:wrap;gap:4px}
 .num{min-width:40px;min-height:40px;padding:4px 8px;font-weight:700;font-variant-numeric:tabular-nums}
 .num.wide{min-width:auto}
+.nums.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(32px,1fr));max-width:480px}.nums.grid .num{min-width:0;padding:4px 0}
 .npt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-@media (max-width:520px){.numrow{grid-template-columns:1fr auto}.numrow .nums{grid-column:1/-1;grid-row:2}}
 @media (max-width:520px){.vs small{display:none}.tm .n{font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .seat.absent{border-style:dashed;opacity:.7}
 .seat.absent .rk{font-family:var(--body);font-size:13px;font-weight:700}
-.welcome{border:2px solid var(--gold);background:var(--gold-soft)}
-.welcome ol{margin:0;padding-left:1.4em}
+.welcome{border:1px solid var(--gold);background:var(--gold-soft);border-radius:12px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.welcome p{margin:0}
+.welcome h3,.welcome ol{margin:0}
+article.welcome{display:flex;flex-direction:column;align-items:stretch}
 .itemrow{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:4px 0}
 .itemrow.used .nm{text-decoration:line-through;color:var(--muted)}
 .st-items .ib.used{opacity:.35;text-decoration:line-through}

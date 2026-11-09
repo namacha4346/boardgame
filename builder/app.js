@@ -80,7 +80,7 @@ function wake() { const st = document.getElementById("stage"); if (!st) return; 
 ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, wake, { passive: true }));
 document.addEventListener("keydown", e => { if (e.key === "Escape" && stageOn && !document.fullscreenElement) { stageOn = false; saveStage(); renderStage(); } });
 /* 当日画面：表示中の種目、開いている卓、同着の入力待ち */
-let cur = null, openT = {}, tieNext = {}, openP = {}, absentMode = {}, firstPrev = {};
+let cur = null, openT = {}, tieNext = {}, openP = {}, openTb = {}, absentMode = {}, firstPrev = {};
 try { cur = localStorage.getItem("vsteams-builder-cur"); } catch (_) {}
 
 /* 読み込んだデータ・共有のデータは信用せず、形と値をそろえる（画面に入れる値を安全にする） */
@@ -313,9 +313,8 @@ const numOpts = (max, min = 0) => [["", "–"], ...Array.from({ length: max - mi
 /* ---------- 画面：設定 ---------- */
 function renderSetup() {
   const c = doc.config, pr = problems();
-  let h = `<div class="row between"><h2>準備</h2><div class="row"><button type="button" data-act="load-sample">見本（八人の盤士杯）を読み込む</button><button type="button" data-act="new-blank">白紙から作る</button></div></div>
-  <p class="hint" style="margin:0">ここで決めた内容に合わせて「当日」「集計」「発表画面」ができあがります。卓や種目を消すと、その結果も集計から外れます（直後なら画面下の「元に戻す」で、結果ごと戻せます）。</p>
-  ${pr.length ? `<div class="warn"><b>確認してください</b><ul style="margin:4px 0 0;padding-left:18px">${pr.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : '<div class="chip ok" style="align-self:flex-start">設定に問題はありません</div>'}
+  let h = `<div class="row between"><h2>準備</h2>${pr.length ? "" : '<span class="chip ok">設定に問題はありません</span>'}</div>
+  ${pr.length ? `<div class="warn"><b>確認してください</b><ul style="margin:4px 0 0;padding-left:18px">${pr.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>` : ""}
   <div class="grid">
     <article class="card"><h3>大会</h3>
       <label class="field"><span class="lbl">大会名</span>${inp("config.name", c.name)}</label>
@@ -327,10 +326,6 @@ function renderSetup() {
       <label class="field"><span class="lbl">メンバー（1行に1人。卓割りの名前で選べます）</span><textarea data-bind="config.roster.${t}" data-type="lines" style="min-height:6em;font-family:var(--body);font-size:14px">${esc((c.roster[t] || []).join("\n"))}</textarea></label>
     </article>`).join("")}
   </div>
-  <article class="card"><div class="row between"><h3>アイテム（デュエル卓の勝者がもらう特典）</h3><button type="button" class="small" data-act="add-item">＋ アイテムを追加</button></div>
-    <p class="hint" style="margin:0">発表画面には中身を出さず、番号だけを出します（番号の意味は主催だけが知っている）。番号は、ほかのアイテムを消しても変わりません。</p>
-    ${c.items.length ? `<div class="scroll"><table class="seats"><tr><th>番号</th><th>名前</th><th>効果</th><th></th></tr>${c.items.map((it, i) => `<tr><td>${it.no}</td><td>${inp(`config.items.${i}.name`, it.name)}</td><td>${inp(`config.items.${i}.desc`, it.desc, "str", 'style="width:100%"')}</td><td><button type="button" class="small danger" data-act="del-item" data-i="${i}">消す</button></td></tr>`).join("")}</table></div>` : '<p class="hint" style="margin:0">まだありません。</p>'}
-  </article>
   <div class="row between"><h2>進行（上から順番）</h2><div class="row"><button type="button" data-act="add-round">＋ ボードゲームROUND</button><button type="button" data-act="add-event">＋ 全員参加の種目</button></div></div>`;
   c.phases.forEach((ph, pi) => {
     const P = `config.phases.${pi}`;
@@ -346,7 +341,9 @@ function renderSetup() {
         <p class="hint" style="margin:0">卓に入る人数の合計：1チーム <b>${sum}</b> / ${c.teamSize} 人</p>
         ${(ph.tables || []).map((tb, ti) => {
           const T = `${P}.tables.${ti}`;
-          return `<div class="tbl"><div class="row between"><div class="row">
+          const it = c.items.find(x => x.id === tb.item), nNamed = TEAMS.reduce((a, t) => a + ((tb.names || {})[t] || []).filter(Boolean).length, 0);
+          const brief = tb.kind === "indiv" ? `配点 ${(tb.points || []).join(",")}` : tb.kind === "team" ? `勝ち${fmt(tb.win)}点・引き分け${fmt(tb.draw)}点` : `アイテム ${it ? it.no + " " + esc(it.name) : "未設定"}`;
+          return `<details class="tbl" data-tid="${tb.id}" ${openTb[tb.id] ? "open" : ""}><summary><b>${esc(tb.game || "（ゲーム名なし）")}</b><span class="hint">${KIND_LABEL[tb.kind]}・${tb.perTeam}対${tb.perTeam}　${brief}　席の名前 ${nNamed}/${tb.perTeam * 2}</span></summary><div class="tbl-in"><div class="row between"><div class="row">
               <label class="field"><span class="lbl">ゲーム名</span>${inp(T + ".game", tb.game, "str", 'style="width:13em"')}</label>
               <label class="field"><span class="lbl">種類</span>${sel(T + ".kind", tb.kind, Object.entries(KIND_LABEL), "str", 'data-re="kind"')}</label>
               <label class="field"><span class="lbl">各チーム何人</span>${inp(T + ".perTeam", tb.perTeam, "num", 'min="1" max="10" data-re="per"')}</label>
@@ -356,7 +353,7 @@ function renderSetup() {
             ${tb.kind === "duel" ? `<label class="field"><span class="lbl">勝ったチームがもらうアイテム</span>${sel(T + ".item", tb.item, [["", "（選ぶ）"], ...c.items.map(it => [it.id, it.no + "　" + it.name])])}</label>` : ""}
             <div class="row" style="align-items:flex-start">${TEAMS.map(t => `<div class="field"><span class="lbl ${t === "A" ? "ta" : "tb"}">${tn(t)} の席（名前・任意）</span>${Array.from({ length: tb.perTeam }, (_, i) => `<input list="ros${t}" data-bind="${T}.names.${t}.${i}" data-type="str" value="${esc(((tb.names || {})[t] || [])[i] || "")}" placeholder="${t}${i + 1}" style="width:9em;margin-top:3px">`).join("")}</div>`).join("")}
             <label class="field"><span class="lbl">進行役（任意）</span>${inp(T + ".host", tb.host, "str", 'style="width:9em"')}</label></div>
-          </div>`;
+          </div></details>`;
         }).join("")}
         <div class="row"><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="indiv">＋ 個人戦の卓</button><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="team">＋ チーム戦の卓</button><button type="button" class="small" data-act="add-table" data-i="${pi}" data-k="duel">＋ デュエル卓</button></div>
       </article></details>`;
@@ -368,12 +365,13 @@ function renderSetup() {
           if (pt.mode === "count") detail = `<label class="field"><span class="lbl">最大の人数</span>${inp(K + ".max", pt.max, "num", 'min="1" max="30" data-re="pmax"')}</label><label class="field"><span class="lbl">1人あたりの点</span>${inp(K + ".per", pt.per, "num", 'step="0.5"')}</label><label class="field"><span class="lbl">ボーナスの条件（○人以上）</span>${inp(K + ".bonusAt", pt.bonusAt, "num")}</label><label class="field"><span class="lbl">ボーナスの点</span>${inp(K + ".bonus", pt.bonus, "num")}</label>`;
           if (pt.mode === "tier") detail = `<label class="field"><span class="lbl">最大の値</span>${inp(K + ".max", pt.max, "num", 'min="1" max="30" data-re="pmax"')}</label><label class="field" style="flex:1"><span class="lbl">段階（「以上:点」をカンマ区切り。例 8:5,6:3,4:1）</span>${inp(K + ".tiers", (pt.tiers || []).map(x => x.join(":")).join(","), "pairs")}</label>`;
           if (pt.mode === "first") detail = `<label class="field" style="flex:1"><span class="lbl">選択肢（「点:説明」をカンマ区切り。例 10:30秒以内,6:1分以内）</span>${inp(K + ".options", (pt.options || []).map(x => x.join(":")).join(","), "pairs")}</label>`;
-          return `<div class="tbl"><div class="row between"><div class="row">
+          const brief = pt.mode === "count" ? `1人${fmt(pt.per)}点${pt.bonusAt ? `・${pt.bonusAt}人以上で+${fmt(pt.bonus)}` : ""}` : pt.mode === "tier" ? (pt.tiers || []).map(x => `${x[0]}以上${fmt(x[1])}点`).join("・") : pt.mode === "first" ? (pt.options || []).map(x => `${esc(x[1])}${fmt(x[0])}点`).join("・") : "";
+          return `<details class="tbl" data-tid="${pt.id}" ${openTb[pt.id] ? "open" : ""}><summary><b>${esc(pt.name || "（名前なし）")}</b><span class="hint">${MODE_LABEL[pt.mode]}${pt.reps > 1 ? `・${pt.reps}問` : ""}　${brief}</span></summary><div class="tbl-in"><div class="row between"><div class="row">
               <label class="field"><span class="lbl">名前</span>${inp(K + ".name", pt.name, "str", 'style="width:16em"')}</label>
               <label class="field"><span class="lbl">点数の付け方</span>${sel(K + ".mode", pt.mode, Object.entries(MODE_LABEL), "str", 'data-re="mode"')}</label>
               <label class="field"><span class="lbl">回数（問題数）</span>${inp(K + ".reps", pt.reps, "num", 'min="1" max="20" data-re="preps"')}</label>
             </div><button type="button" class="small danger" data-act="del-part" data-i="${pi}" data-j="${ki}">消す</button></div>
-            <div class="row">${detail}</div></div>`;
+            <div class="row">${detail}</div></div></details>`;
         }).join("")}
         <div><button type="button" class="small" data-act="add-part" data-i="${pi}">＋ 項目を追加</button></div>
         <p class="hint" style="margin:0">人数×点：渡せた人数・抜けた人数など。段階で点：正しい文字数などで点が変わる。先着：先にクリアしたチームだけ点が入る。</p>
@@ -381,7 +379,12 @@ function renderSetup() {
     }
   });
   if (!c.phases.length) h += '<p class="hint">まだ何もありません。上のボタンでROUNDや種目を追加してください。</p>';
-  return h + `<datalist id="rosA">${(c.roster.A || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist><datalist id="rosB">${(c.roster.B || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`;
+  /* アイテムはデュエル卓を使うときだけ要るので、進行の下にたたんでおく */
+  h += `<details class="pd" data-pid="items" ${openP.items ? "open" : ""}><summary><span class="chip">アイテム</span><b>デュエル卓の勝者がもらう特典</b><span class="hint">${c.items.length}個</span></summary><article class="card">
+    <div class="row between"><p class="hint" style="margin:0">発表画面には番号だけを出します（中身は主催だけが知っている）。番号は、ほかのアイテムを消しても変わりません。</p><button type="button" class="small" data-act="add-item">＋ アイテムを追加</button></div>
+    ${c.items.length ? `<div class="scroll"><table class="seats"><tr><th>番号</th><th>名前</th><th>効果</th><th></th></tr>${c.items.map((it, i) => `<tr><td>${it.no}</td><td>${inp(`config.items.${i}.name`, it.name)}</td><td>${inp(`config.items.${i}.desc`, it.desc, "str", 'style="width:100%"')}</td><td><button type="button" class="small danger" data-act="del-item" data-i="${i}">消す</button></td></tr>`).join("")}</table></div>` : '<p class="hint" style="margin:0">まだありません。</p>'}
+  </article></details>`;
+  return h +`<datalist id="rosA">${(c.roster.A || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist><datalist id="rosB">${(c.roster.B || []).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`;
 }
 
 /* ---------- 画面：当日（結果の入力） ---------- */
@@ -393,13 +396,15 @@ function curPhase() {
   if (i < 0) { i = ps.findIndex(p => phaseRes(p).status !== "done"); if (i < 0) i = ps.length - 1; }
   return i;
 }
+/* ほかの操作は「…」の中にしまう（いつも使うボタンだけを見せる） */
+const more = (inner, label = "ほかの操作") => `<details class="more"><summary aria-label="${label}" title="${label}">…</summary><div class="menu">${inner}</div></details>`;
+/* タイマーは1行。止まっているときにスタートを押すと、このROUNDの分数で始まる */
 function timerBar(ph) {
-  const set = doc.timer.label === ph.name;
-  return `<article class="card tbar"><div class="row between">
-      <div class="row"><span class="hint">タイマー${doc.timer.label ? "（" + esc(doc.timer.label) + "）" : ""}</span><span class="tbig" id="tmBig">--:--</span><span class="hint" id="tmEnd"></span></div>
-      <div class="row">${set ? "" : `<button type="button" data-act="timer-set" data-label="${esc(ph.name)}" data-min="${ph.minutes || 60}">${esc(ph.name)}の${ph.minutes || 60}分にする</button>`}
-        <button type="button" class="primary tgo" data-act="timer-go">スタート</button><button type="button" data-act="timer-reset">リセット</button><button type="button" data-act="timer-sound" id="tmSound">音：オフ</button></div>
-    </div></article>`;
+  const tm = doc.timer, min = ph.minutes || 60, mine = tm.label === ph.name;
+  return `<div class="tbar"><span class="tlab">${esc(tm.label || "タイマー")}</span><span class="tbig" id="tmBig">--:--</span><span class="hint tend" id="tmEnd"></span>
+      <button type="button" class="primary tgo" data-act="timer-go" data-label="${esc(ph.name)}" data-min="${min}">スタート</button>
+      ${more(`${mine ? "" : `<button type="button" data-act="timer-set" data-label="${esc(ph.name)}" data-min="${min}">${esc(ph.name)}の${min}分にする</button>`}<button type="button" data-act="timer-reset">リセット</button><button type="button" data-act="timer-sound" id="tmSound">音：オフ</button>`, "タイマーのほかの操作")}
+    </div>`;
 }
 function tableCard(tb) {
   /* 入れ終わった卓は、最後に押した直後は開いたまま（押し間違いに気づけるように）。見出しで開け閉めできる */
@@ -419,8 +424,12 @@ function tableCard(tb) {
       const rk = rm[t][i], ab = isAbs(t, i);
       h += `<button type="button" class="seat ${t === "A" ? "sa" : "sb"}${rk ? " ranked" : ""}${ab ? " absent" : ""}" data-act="pick" data-tb="${tb.id}" data-t="${t}" data-i="${i}"><span class="rk">${ab ? "欠席" + (rk ? `（${rk}位扱い）` : "") : rk ? rk + "位" : ""}</span><span class="nm">${esc(nameOf(tb, t, i))}</span><span class="pt">${rk ? fmt(r.seat[t + i]) + "点" : ""}</span></button>`;
     } });
-    h += `</div><div class="row"><button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id] && !noTie}" ${n === 0 || n >= cap || am || noTie ? "disabled" : ""}>次の人を前と同着にする</button><button type="button" data-act="undo-rank" data-tb="${tb.id}" ${n && !am ? "" : "disabled"}>1つ戻す</button><button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}" ${n ? "" : "disabled"}>やり直す</button>${tb.perTeam > 1 ? `<button type="button" data-act="absent-mode" data-tb="${tb.id}" aria-pressed="${am}">${am ? "欠席を選び終わる" : "欠席がいる"}</button>` : ""}</div>
-      <p class="hint" style="margin:0">順位の付いた人をもう一度押すと、その人の順位を消せます。${tb.perTeam > 1 ? "欠席の席は、下から2番目の順位にいたものとして数えます。" : ""}</p>`;
+    /* いつも見せるのは、今使えるボタンだけ。めったに使わない操作は「…」の中 */
+    const canTie = n > 0 && n < cap && !am && !noTie;
+    const named = TEAMS.some(t => ((tb.names || {})[t] || []).some(Boolean));
+    h += `</div><div class="row tact">${am ? `<button type="button" class="primary" data-act="absent-mode" data-tb="${tb.id}">欠席を選び終わる</button>` : ""}${n && !am ? `<button type="button" data-act="undo-rank" data-tb="${tb.id}">↶ 1つ戻す</button>` : ""}${canTie ? `<button type="button" data-act="tie" data-tb="${tb.id}" aria-pressed="${!!tieNext[tb.id]}">次の人を同着に</button>` : ""}
+      ${more(`${n ? `<button type="button" class="danger" data-act="clear-rank" data-tb="${tb.id}">順位をすべて消す</button>` : ""}${tb.perTeam > 1 && !am ? `<button type="button" data-act="absent-mode" data-tb="${tb.id}">欠席がいる</button>` : ""}
+        <p class="hint">順位の付いた人をもう一度押すと、その人の順位だけ消せます。${tb.perTeam > 1 ? "欠席の席は、下から2番目の順位にいたものとして数えます。" : ""}${named ? "" : "席の名前は「準備」の卓の中で入れられます。"}</p>`)}</div>`;
   } else {
     const cur2 = tb.kind === "team" ? doc.results.team[tb.id] : doc.results.duel[tb.id];
     const opts = [["A", tn("A") + " の勝ち", "sa"], ["B", tn("B") + " の勝ち", "sb"]];
@@ -435,14 +444,16 @@ function partCard(pt, er) {
   let h = `<article class="card"><div class="row between"><h3>${esc(pt.name)}</h3><span class="tsum"><span class="ta">${fmt(er.part[pt.id].A)}</span> − <span class="tb">${fmt(er.part[pt.id].B)}</span></span></div>`;
   for (let k = 0; k < reps; k++) {
     if (reps > 1) h += `<div class="qlabel">第${k + 1}問</div>`;
+    h += `<div class="qpair">`;
     TEAMS.forEach(t => {
       const v = (((doc.results.ev[pt.id] || {})[t]) || [])[k], p = partPts(pt, v);
       let ctl;
       if (pt.mode === "count" || pt.mode === "tier") ctl = Array.from({ length: (pt.max || 8) + 1 }, (_, n) => `<button type="button" class="num" data-act="num" data-pt="${pt.id}" data-t="${t}" data-k="${k}" data-v="${n}" aria-pressed="${v === n}">${n}</button>`).join("");
       else if (pt.mode === "first") ctl = [...(pt.options || []), [0, "なし"]].map(([pv, l]) => `<button type="button" class="num wide" data-act="num" data-pt="${pt.id}" data-t="${t}" data-k="${k}" data-v="${pv}" data-first="1" aria-pressed="${v === pv}">${esc(l)}${pv ? `（${pv}）` : ""}</button>`).join("");
       else ctl = inp(`results.ev.${pt.id}.${t}.${k}`, v, "num", 'step="0.5" style="width:6em"');
-      h += `<div class="numrow"><span class="nteam ${t === "A" ? "ta" : "tb"}">${tn(t)}</span><div class="nums">${ctl}</div><span class="npt">${p != null ? fmt(p) + "点" : "–"}</span></div>`;
+      h += `<div class="numrow ${t === "A" ? "na" : "nb"}"><div class="nhead"><span class="nteam ${t === "A" ? "ta" : "tb"}">${tn(t)}</span><span class="npt">${p != null ? fmt(p) + "点" : "–"}</span></div><div class="nums${pt.mode === "count" || pt.mode === "tier" ? " grid" : ""}">${ctl}</div></div>`;
     });
+    h += `</div>`;
   }
   return h + `</article>`;
 }
@@ -451,11 +462,8 @@ const STATUS_LABEL = { done: "確定", partial: "入力中", empty: "未入力" 
 function welcome() {
   let seen = false; try { seen = localStorage.getItem("vsteams-builder-welcome") === "1"; } catch (_) {}
   if (seen || syncConf().url) return ""; /* 共有中は出さない（ここから白紙にすると、共有中の大会が消えてしまうため） */
-  return `<article class="card welcome"><h3>はじめに</h3>
-    <ol><li>「準備」で大会名・チーム・人数を決め、ROUNDと卓（個人戦・チーム戦・デュエル）、全員参加の種目を作る。今は見本（2026年10月の八人の盤士杯）が入っています。</li>
-    <li>当日はこの「当日」画面で、ROUNDを選んで結果を押していく。順位は1位の人から順に押すだけです。</li>
-    <li>「集計」の「発表画面を開く」で、プロジェクターに合計点とタイマーを映す。</li></ol>
-    <div class="row"><button type="button" class="primary" data-act="welcome-blank">白紙から自分の大会を作る</button><button type="button" data-act="welcome-close">見本のまま試してみる</button></div></article>`;
+  return `<div class="welcome"><p><b>見本の大会が入っています。</b>席を押して試すか、白紙から自分の大会を作れます。</p>
+    <div class="row"><button type="button" class="primary" data-act="welcome-blank">白紙から作る</button><button type="button" data-act="welcome-close">このまま試す</button></div></div>`;
 }
 function renderPlay() {
   const c = doc.config;
@@ -464,8 +472,7 @@ function renderPlay() {
   /* 表示中のROUNDを覚えておく（最後の卓を入れた瞬間に、勝手に次へ移らないように） */
   if (cur !== ph.id) { cur = ph.id; try { localStorage.setItem("vsteams-builder-cur", cur); } catch (_) {} }
   let h = welcome() + `<nav class="pills" aria-label="種目">${c.phases.map((p, i) => { const s = phaseRes(p).status; return `<button type="button" data-act="phase" data-i="${i}" aria-pressed="${i === pi}" title="${STATUS_LABEL[s]}"><span class="dot ${s}" aria-hidden="true"></span>${esc(p.name)}<span class="sr">（${STATUS_LABEL[s]}）</span></button>`; }).join("")}</nav>
-    <div class="row between"><h2>${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h2><div class="row">${chip(pr.status)}<b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b><button type="button" data-act="st-open">発表画面</button></div></div>
-    ${timerBar(ph)}`;
+    <div class="phead"><div class="ptitle"><h2>${esc(ph.name)} <span class="hint">${esc(ph.time || "")}</span></h2><span class="psum"><b class="ta">${fmt(pr.pts.A)}</b> − <b class="tb">${fmt(pr.pts.B)}</b></span></div><div class="pctl">${timerBar(ph)}<button type="button" data-act="st-open">発表画面</button></div></div>`;
   if (ph.type === "round") {
     const tbs = ph.tables || [];
     h += `<div class="grid">${tbs.map(tableCard).join("")}</div>`;
@@ -506,6 +513,8 @@ function renderData() {
     ${base && s.key ? `<label class="field"><span class="lbl">見るだけのリンク（合言葉なし。発表用のパソコンなど）</span><input readonly value="${esc(base)}" style="width:100%"></label>` : ""}
     ${hasBackup ? `<div><button type="button" class="small" data-act="restore-backup">共有に参加する前の内容を出す</button></div>` : ""}
   </article>
+  <article class="card"><h3>大会をまるごと入れかえる</h3><p class="hint" style="margin:0">今の設定と結果を消して、見本か白紙に入れかえます。直後なら画面下の「元に戻す」で戻せます。</p>
+    <div class="row"><button type="button" data-act="load-sample">見本（八人の盤士杯）を読み込む</button><button type="button" data-act="new-blank">白紙にする</button></div></article>
   <article class="card"><h3>結果だけを消す</h3><p class="hint" style="margin:0">設定（チーム・卓・種目）は残して、順位や点数の入力だけを消します。消した直後なら、画面下の「元に戻す」で戻せます。</p><div><button type="button" class="danger" data-act="reset-results">結果を消す</button></div></article>
   <article class="card"><h3>書き出し・読み込み</h3><p class="hint" style="margin:0">設定と結果をまとめた文字です。コピーして保存しておけば、同じ大会の設定を次回も使えます。</p>
     <textarea id="dataBox">${esc(JSON.stringify({ config: doc.config, results: doc.results }, null, 1))}</textarea>
@@ -714,7 +723,6 @@ function wholeUndo(msg) {
   const keep = JSON.parse(JSON.stringify({ config: doc.config, results: doc.results }));
   pushUndo(msg, () => { const before = doc.results; doc.config = sanitizeConfig(keep.config); doc.results = sanitizeResults(keep.results); markAllR(before); markAllR(doc.results); }, true);
 }
-const SURE_DEL = "もう一度押すと消えます";
 const findPhase = id => doc.config.phases.find(p => p.id === id);
 /* 危ない操作は2回押しで実行（1回目はボタンの文字が変わる） */
 function sure(b, label) {
@@ -732,7 +740,15 @@ document.addEventListener("input", e => { const el = e.target; if (el.dataset &&
 /* ---------- 操作 ---------- */
 function newPid() { const id = uid("p"); openP[id] = true; return id; }
 function findTable(id) { for (const ph of doc.config.phases) for (const tb of (ph.tables || [])) if (tb.id === id) return tb; return null; }
-document.addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.pid) openP[d.dataset.pid] = d.open; }, true);
+document.addEventListener("toggle", e => { const d = e.target; if (!d.dataset) return; if (d.dataset.pid) openP[d.dataset.pid] = d.open; if (d.dataset.tid) openTb[d.dataset.tid] = d.open; }, true);
+/* 「…」のメニューは、外を押したら閉じる */
+document.addEventListener("click", e => { document.querySelectorAll("details.more[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; }); }, true);
+/* 結果だけを戻す「元に戻す」（設定の変更として扱わない） */
+function resultUndo(msg, keys) {
+  const before = keys.map(k => [k, JSON.parse(JSON.stringify(rGet(doc.results, k) ?? null))]);
+  pushUndo(msg, () => { before.forEach(([k, v]) => { rSet(doc.results, k, v === null && !k.startsWith("ev|") ? undefined : v); markR(k); }); return "r"; });
+}
+const timerUndo = msg => { const keep = { ...doc.timer }; pushUndo(msg, () => { Object.assign(doc.timer, keep); markT(); fl = {}; return "r"; }); };
 function newTable(kind, ph) {
   const left = Math.max(1, doc.config.teamSize - (ph.tables || []).reduce((a, tb) => a + (Number(tb.perTeam) || 0), 0));
   const per = kind === "duel" ? 1 : kind === "team" ? 2 : Math.min(left, 3);
@@ -753,14 +769,14 @@ document.addEventListener("click", async e => {
     case "undo": {
       const u = undoStack.pop(); $("undo").hidden = true; if (!u) break;
       if (u.whole && latestStamp() > u.at) { undoStack = []; flash("このあとに入力や変更があったため、元に戻せません。"); break; }
-      if (u.apply() === false) { flash("元の場所が見つからないため、元に戻せませんでした。"); break; }
-      markC(); changed(true); flash(`元に戻しました（${u.msg}）`);
+      const res = u.apply();
+      if (res === false) { flash("元の場所が見つからないため、元に戻せませんでした。"); break; }
+      if (res !== "r") markC(); changed(true); flash(`元に戻しました（${u.msg}）`);
       if (undoStack.length) { const n = undoStack[undoStack.length - 1]; $("undoMsg").textContent = n.msg; $("undo").hidden = false; }
       break;
     }
     case "add-item": { const no = Math.max(0, ...c.items.map(x => x.no || 0)) + 1; c.items.push({ id: uid("i"), no, name: "アイテム" + no, desc: "" }); markC(); changed(true); break; }
     case "del-item": {
-      if (!sure(b, SURE_DEL)) break;
       const it = c.items[i], refs = [], games = []; c.phases.forEach(ph => (ph.tables || []).forEach(tb => { if (tb.item === it.id) { tb.item = ""; refs.push(tb.id); games.push(tb.game || "デュエル卓"); } }));
       if (games.length) setTimeout(() => flash(`「${games.join("」「")}」でもらえるアイテムが空になりました。準備で選び直してください。`), 0);
       c.items.splice(i, 1);
@@ -770,11 +786,11 @@ document.addEventListener("click", async e => {
     case "add-round": markC(); c.phases.push({ id: newPid(), type: "round", name: "ROUND " + (c.phases.filter(p => p.type === "round").length + 1), time: "", minutes: 60, tables: [] }); changed(true); break;
     case "add-event": markC(); c.phases.push({ id: newPid(), type: "event", name: "全員参加の種目", time: "", minutes: 30, parts: [{ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }] }); changed(true); break;
     case "move": { const d = Number(b.dataset.d), k = i + d; if (k < 0 || k >= c.phases.length) break; [c.phases[i], c.phases[k]] = [c.phases[k], c.phases[i]]; markC(); changed(true); break; }
-    case "del-phase": { if (!sure(b, SURE_DEL)) break; const ph = c.phases.splice(i, 1)[0]; pushUndo(`「${ph.name}」を消しました`, () => { doc.config.phases.splice(Math.min(i, doc.config.phases.length), 0, ph); }); markC(); changed(true); break; }
-    case "add-table": c.phases[i].tables.push(newTable(b.dataset.k, c.phases[i])); markC(); changed(true); break;
-    case "del-table": { if (!sure(b, SURE_DEL)) break; const pid = c.phases[i].id, tb = c.phases[i].tables.splice(j, 1)[0]; pushUndo(`「${tb.game || "卓"}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.tables.splice(Math.min(j, ph.tables.length), 0, tb); }); markC(); changed(true); break; }
-    case "add-part": c.phases[i].parts.push({ id: uid("e"), name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); markC(); changed(true); break;
-    case "del-part": { if (!sure(b, SURE_DEL)) break; const pid = c.phases[i].id, pt = c.phases[i].parts.splice(j, 1)[0]; pushUndo(`「${pt.name}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.parts.splice(Math.min(j, ph.parts.length), 0, pt); }); markC(); changed(true); break; }
+    case "del-phase": { const ph = c.phases.splice(i, 1)[0]; pushUndo(`「${ph.name}」を消しました`, () => { doc.config.phases.splice(Math.min(i, doc.config.phases.length), 0, ph); }); markC(); changed(true); break; }
+    case "add-table": { const nt = newTable(b.dataset.k, c.phases[i]); openTb[nt.id] = true; c.phases[i].tables.push(nt); } markC(); changed(true); break;
+    case "del-table": { const pid = c.phases[i].id, tb = c.phases[i].tables.splice(j, 1)[0]; pushUndo(`「${tb.game || "卓"}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.tables.splice(Math.min(j, ph.tables.length), 0, tb); }); markC(); changed(true); break; }
+    case "add-part": { const id = uid("e"); openTb[id] = true; c.phases[i].parts.push({ id, name: "項目", mode: "count", reps: 1, max: c.teamSize, per: 1, bonusAt: 0, bonus: 0 }); } markC(); changed(true); break;
+    case "del-part": { const pid = c.phases[i].id, pt = c.phases[i].parts.splice(j, 1)[0]; pushUndo(`「${pt.name}」を消しました`, () => { const ph = findPhase(pid); if (!ph) return false; ph.parts.splice(Math.min(j, ph.parts.length), 0, pt); }); markC(); changed(true); break; }
     case "phase": cur = c.phases[i].id; try { localStorage.setItem("vsteams-builder-cur", cur); } catch (_) {} renderPanel(); window.scrollTo({ top: 0 }); break;
     case "toggle-table": { const id = b.dataset.tb, tb = findTable(id); openT[id] = !(openT[id] ?? tableRes(tb).status !== "done"); renderPanel(); break; }
     case "pick": {
@@ -798,13 +814,13 @@ document.addEventListener("click", async e => {
     case "absent-mode": absentMode[b.dataset.tb] = !absentMode[b.dataset.tb]; tieNext[b.dataset.tb] = false; renderPanel(); break;
     case "tie": tieNext[b.dataset.tb] = !tieNext[b.dataset.tb]; renderPanel(); break;
     case "undo-rank": { const ord = doc.results.order[b.dataset.tb] || []; ord.pop(); tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break; }
-    case "clear-rank": if (!sure(b, "もう一度押すとやり直します")) break; doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break;
+    case "clear-rank": resultUndo("順位をすべて消しました", ["order|" + b.dataset.tb]); doc.results.order[b.dataset.tb] = []; tieNext[b.dataset.tb] = false; markR("order|" + b.dataset.tb); changed(true); break;
     case "win": { const box = b.dataset.k === "team" ? doc.results.team : doc.results.duel, v = b.dataset.v; if (box[b.dataset.tb] === v) delete box[b.dataset.tb]; else box[b.dataset.tb] = v; openT[b.dataset.tb] = true; markR(b.dataset.k + "|" + b.dataset.tb); changed(true); break; }
     case "num": {
       const { pt, t, k } = b.dataset, v = Number(b.dataset.v), path = `results.ev.${pt}.${t}.${k}`, oPath = `results.ev.${pt}.${other(t)}.${k}`, fk = `${pt}|${k}`;
       const off = getPath(path) === v, ov = getPath(oPath);
       /* 先着：相手チームにもう点が入っているときは、2回押しで上書き（押し間違いで相手の点を消さないように） */
-      if (b.dataset.first && !off && v > 0 && ov > 0 && !sure(b, `もう一度押すと${tn(other(t))}の${fmt(ov)}点を消して入れます`)) break;
+      if (b.dataset.first && !off && v > 0 && ov > 0) { resultUndo(`${tn(other(t))}の${fmt(ov)}点を消しました`, [`ev|${pt}|A|${k}`, `ev|${pt}|B|${k}`]); setTimeout(() => flash(`先着は一方だけなので、${tn(other(t))}の${fmt(ov)}点を消しました（画面下の「元に戻す」で戻せます）`), 0); }
       setPath(path, off ? null : v); markR(`ev|${pt}|${t}|${k}`);
       /* 先着を取り消したら、自動で0点にしたもう一方を、その前の値に戻す */
       if (b.dataset.first && off && v > 0 && ov === 0) { const pv = firstPrev[fk] && firstPrev[fk].t === other(t) ? firstPrev[fk].v : null; setPath(oPath, pv); markR(`ev|${pt}|${other(t)}|${k}`); delete firstPrev[fk]; }
@@ -817,7 +833,6 @@ document.addEventListener("click", async e => {
     case "st-timer": stTimer = !stTimer; saveStage(); renderStage(); break;
     case "use-item": { const k = b.dataset.tb, w = doc.results.duel[k]; if (doc.results.used[k] === w) delete doc.results.used[k]; else if (w) doc.results.used[k] = w; markR("used|" + k); changed(true); break; }
     case "welcome-close": case "welcome-blank":
-      if (a === "welcome-blank" && !sure(b, "もう一度押すと、今の内容を消して白紙にします")) break;
       try { localStorage.setItem("vsteams-builder-welcome", "1"); } catch (_) {}
       if (a === "welcome-blank") { wholeUndo("白紙にしました"); const before = doc.results; doc.config = blankConfig(); doc.results = blankResults(); markC(); markAllR(before); tab = "setup"; try { localStorage.setItem(LS_TAB, tab); } catch (_) {} changed(true); renderTabs(); }
       else renderPanel();
@@ -828,15 +843,15 @@ document.addEventListener("click", async e => {
       try { await navigator.clipboard.writeText(lines.join("\n")); $("copymsg").textContent = "コピーしました"; } catch (_) { $("copymsg").textContent = lines.join(" ／ "); }
       break;
     }
-    case "timer-set": if (doc.timer.end != null && !sure(b, "動いているタイマーを止めて変える（もう一度押す）")) break; tset({ total: Number(b.dataset.min) * 60000, label: b.dataset.label, end: null, paused: null }); fl = {}; renderPanel(); break;
+    case "timer-set": if (doc.timer.end != null || doc.timer.paused != null) timerUndo("タイマーを切りかえました"); tset({ total: Number(b.dataset.min) * 60000, label: b.dataset.label, end: null, paused: null }); fl = {}; renderPanel(); break;
     case "timer-go": {
       unlockAudio(); const now = nowMs(), tm = doc.timer;
       if (tm.end != null) tset({ paused: tm.end - now, end: null });
       else if (tm.paused != null) tset({ end: now + tm.paused, paused: null });
-      else { const mi = $("tmMin"), la = $("tmLabel"); const total = mi ? Math.max(1, Number(mi.value) || 1) * 60000 : tm.total; tset({ total, label: la ? la.value : tm.label, end: now + total, paused: null }); fl = {}; }
+      else { /* 止まっているとき：表示中のROUNDの分数で始める（発表画面のボタンは今の設定のまま） */ const own = b.dataset.label && tm.label !== b.dataset.label, total = own ? Math.max(1, Number(b.dataset.min) || 60) * 60000 : tm.total; tset({ total, label: own ? b.dataset.label : tm.label, end: now + total, paused: null }); fl = {}; renderPanel(); }
       tick(true); break;
     }
-    case "timer-reset": { if ((doc.timer.end != null || doc.timer.paused != null) && !sure(b, "もう一度押すとリセット")) break; const mi = $("tmMin"), la = $("tmLabel"); tset({ total: mi ? Math.max(1, Number(mi.value) || 1) * 60000 : doc.timer.total, label: la ? la.value : doc.timer.label, end: null, paused: null }); fl = {}; tick(true); break; }
+    case "timer-reset": { if (doc.timer.end != null || doc.timer.paused != null) timerUndo("タイマーをリセットしました"); tset({ end: null, paused: null }); fl = {}; tick(true); break; }
     case "timer-sound": sound = !sound; if (sound) { unlockAudio(); beep(880, .15, 1); } tick(true); break;
     case "sync-save": {
       const url = ($("syncUrl").value || "").trim(), id = ($("syncId").value || "").trim().replace(/[^\w-]/g, ""), key = ($("syncKey").value || "").trim();
