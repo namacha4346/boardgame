@@ -1,4 +1,4 @@
-<title>盤士リーグ</title>
+<title>VS TEAMS LEAGUE</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -159,7 +159,7 @@ input.grow { flex: 1 1 160px; }
 <div class="wrap">
   <header class="board">
     <div class="eyebrow">Board Game Arena Team League</div>
-    <h1 id="title">盤士リーグ</h1>
+    <h1 id="title">VS TEAMS LEAGUE</h1>
     <div class="meta" id="meta"></div>
   </header>
 
@@ -182,7 +182,7 @@ input.grow { flex: 1 1 160px; }
 
 <script>
 (() => {
-  const DEFAULT_CFG = { name: "盤士リーグ", game: "", p1: 5, p2: 1, p3: -1, p4: -3, regular: 8, final: 2, carry: 0.5, deadline: "" };
+  const DEFAULT_CFG = { name: "VS TEAMS LEAGUE", game: "", p1: 5, p2: 1, p3: -1, p4: -3, regular: 8, final: 2, carry: 0.5, deadline: "" };
   const TABS = ["standings", "rounds", "players", "teams", "setup"];
   // GF(4) の掛け算表。卓 = 枠 XOR (節 × チーム番号) にすると、4節で他チーム全員と1回ずつ同卓になる
   const GF4 = [[0, 0, 0, 0], [0, 1, 2, 3], [0, 2, 3, 1], [0, 3, 1, 2]];
@@ -508,7 +508,7 @@ input.grow { flex: 1 1 160px; }
   // ---------- サンプル ----------
   function enterSample() {
     real = { cfg: S.cfg, teams: S.teams, players: S.players, results: S.results };
-    S.sample = true; S.cfg = { ...DEFAULT_CFG, name: "盤士リーグ（サンプル）", game: "サンプルのゲーム" };
+    S.sample = true; S.cfg = { ...DEFAULT_CFG, name: "VS TEAMS LEAGUE（サンプル）", game: "サンプルのゲーム" };
     S.teams = new Map(); S.players = new Map(); S.results = new Map(); S.round = null; closeEdit();
     ["チーム朱", "チーム藍", "チーム山吹", "チーム紫"].forEach((nm, i) => S.teams.set("t" + i, { name: nm, order: i }));
     for (let i = 0; i < 16; i++) S.players.set("s" + i, { name: `サンプル${String(i + 1).padStart(2, "0")}`, bga: `sample_${i + 1}`, team: "t" + (i % 4), slot: Math.floor(i / 4) });
