@@ -133,6 +133,48 @@ summary .open { font-size: 12px; color: var(--muted); }
 .note { font-size: 12px; color: var(--muted); }
 .empty { color: var(--muted); padding: 20px; text-align: center; }
 footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+/* 全画面の順位ボード（配信・画面共有向け。テーマに関係なく墨色） */
+.fs-open { justify-self: start; display: inline-flex; align-items: center; gap: 10px; background: #F1ECE2; color: #16161A; border: 0; border-radius: 999px; padding: 10px 20px; font: 700 14px/1 var(--font-body); cursor: pointer; }
+.fs-open:hover { background: #fff; }
+.fs-open svg { width: 16px; height: 16px; }
+.fs { position: fixed; inset: 0; z-index: 50; background: #16161A; color: #F1ECE2; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; --u: min(1vw, 1.9vh); padding: 3.2vh 3.6vw 0; font-family: var(--font-body); overflow: hidden; }
+.fs[hidden] { display: none; }
+.fs-head { display: flex; align-items: flex-end; justify-content: space-between; gap: calc(2 * var(--u)); padding-bottom: 2.4vh; }
+.fs-title { font-family: var(--font-display); font-size: calc(5.2 * var(--u)); line-height: .9; letter-spacing: .01em; }
+.fs-sub { font-size: calc(1.6 * var(--u)); color: #B9B2A5; margin-top: calc(.8 * var(--u)); display: flex; gap: calc(2 * var(--u)); flex-wrap: wrap; }
+.fs-sub b { font-family: var(--font-num); color: #F1ECE2; font-weight: 600; font-size: calc(2.2 * var(--u)); }
+.fs-sample { background: #F0B323; color: #16161A; font-weight: 700; border-radius: 6px; padding: .2em .6em; line-height: 1.2; align-self: center; }
+.fs-close { background: transparent; color: #B9B2A5; border: 1px solid #3A3940; border-radius: 999px; padding: .5em 1.1em; font: 700 calc(1.4 * var(--u))/1 var(--font-body); cursor: pointer; flex: none; }
+.fs-close:hover { color: #fff; border-color: #fff; }
+.fs-rows { display: grid; grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 1.4vh; padding-bottom: 2.6vh; min-height: 0; }
+.fs-row { --tint: color-mix(in srgb, var(--tc) 14%, #1F1F25); display: grid; grid-template-columns: calc(9 * var(--u)) calc(1.1 * var(--u)) minmax(0, 1fr) calc(9 * var(--u)) calc(10 * var(--u)) calc(17 * var(--u)); align-items: center; gap: calc(2.4 * var(--u)); background: var(--tint); border-radius: calc(1.4 * var(--u)); padding: 0 calc(2.8 * var(--u)) 0 calc(2.2 * var(--u)); min-height: 0; overflow: hidden; }
+.fs-row.lead { --tint: color-mix(in srgb, var(--tc) 30%, #1F1F25); }
+.fs-rank { display: grid; justify-items: center; gap: calc(.4 * var(--u)); }
+.fs-rank b { font-family: var(--font-display); font-weight: 400; font-size: calc(7 * var(--u)); line-height: .85; }
+.fs-rank b sup { font-size: .32em; vertical-align: top; margin-left: .05em; }
+.fs-move { font: 600 calc(1.4 * var(--u))/1 var(--font-num); color: #8F897F; }
+.fs-move.up { color: #5FCB93; } .fs-move.down { color: #F08A7B; }
+.fs-chip { align-self: center; height: 64%; background: var(--tc); border-radius: 999px; }
+.fs-name { min-width: 0; display: grid; gap: calc(.6 * var(--u)); }
+.fs-name b { font-weight: 900; font-size: calc(3.8 * var(--u)); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-name span { font-size: calc(1.5 * var(--u)); color: #B9B2A5; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fs-stat { display: grid; gap: calc(.3 * var(--u)); text-align: right; }
+.fs-stat span { font-size: calc(1.25 * var(--u)); color: #B9B2A5; letter-spacing: .06em; white-space: nowrap; }
+.fs-stat b { font: 600 calc(3.6 * var(--u))/1 var(--font-num); font-variant-numeric: tabular-nums; }
+.fs-stat b.plus { color: #5FCB93; } .fs-stat b.minus { color: #F08A7B; }
+.fs-total { text-align: right; display: grid; gap: calc(.4 * var(--u)); }
+.fs-total b { font-family: var(--font-display); font-weight: 400; font-size: calc(7.2 * var(--u)); line-height: .85; font-variant-numeric: tabular-nums; }
+.fs-total span { font-size: calc(1.4 * var(--u)); color: #B9B2A5; white-space: nowrap; }
+.fs-stripe { display: grid; grid-template-columns: repeat(4, 1fr); height: 1.1vh; margin-inline: -3.6vw; }
+@media (max-aspect-ratio: 4/5) {
+  .fs { --u: min(2.4vw, 1.5vh); padding-inline: 16px; }
+  .fs-stripe { margin-inline: -16px; }
+  .fs-row { grid-template-columns: calc(8 * var(--u)) minmax(0, 1fr); grid-template-areas: "rank name" "rank tot"; align-content: center; row-gap: calc(1 * var(--u)); padding: 0 calc(2.4 * var(--u)) 0 0; border-left: calc(1 * var(--u)) solid var(--tc); }
+  .fs-rank { grid-area: rank; } .fs-name { grid-area: name; } .fs-total { grid-area: tot; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .fs-total b { order: 2; font-size: calc(6 * var(--u)); }
+  .fs-name b { font-size: calc(3.2 * var(--u)); }
+  .fs-chip, .fs-stat { display: none; }
+}
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 </style>
 <script src="config.js"></script>
@@ -145,8 +187,18 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
     <h1 id="lname">VS TEAMS LEAGUE</h1>
     <div class="status" id="status">読み込み中…</div>
     <div class="sample" id="sampleNote" hidden>サンプルデータで表示しています（実際の結果ではありません）</div>
+    <button class="fs-open" id="fsOpen" type="button"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4"/></svg>全画面で順位を見る</button>
   </div>
 </header>
+
+<div class="fs" id="fs" hidden role="dialog" aria-modal="true" aria-labelledby="fsTitle">
+  <div class="fs-head">
+    <div><div class="fs-title" id="fsTitle">VS TEAMS LEAGUE</div><div class="fs-sub" id="fsSub"></div></div>
+    <button class="fs-close" id="fsClose" type="button">閉じる ✕</button>
+  </div>
+  <div class="fs-rows" id="fsRows"></div>
+  <div class="fs-stripe" aria-hidden="true"><i style="background:#2546D8"></i><i style="background:#E2402F"></i><i style="background:#F0B323"></i><i style="background:#1E8C5A"></i></div>
+</div>
 
 <main class="wrap" style="padding-top:36px">
   <section aria-labelledby="h-teams">
@@ -306,7 +358,54 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
 
     const warn = D.unknown.size ? `<p class="note">チームに登録されていない名前があります：${[...D.unknown].map(esc).join("、")}（config.js のメンバー名と結果報告の名前をそろえてください）</p>` : "";
     $("#foot").innerHTML = `${warn}着順ポイント ${C.points.map(fmt).join(" / ")}。同着はその着順のポイントを分け合います。データ：${source === "sample" ? "サンプル" : "Google フォームの結果報告"}（${new Date().toLocaleString("ja-JP")} に読み込み）`;
+    renderBoard(D, source, ri, lastLabel);
   }
+
+  // 全画面の順位ボード。前の節までの順位と比べて上がった・下がったも出す
+  function renderBoard(D, source, ri, lastLabel) {
+    $("#fsTitle").textContent = C.name;
+    const last = D.played[D.played.length - 1];
+    const prevTotal = (t) => t.total - (last != null ? t.perRound[last] || 0 : 0);
+    const prevRank = new Map([...D.teams].sort((a, b) => prevTotal(b) - prevTotal(a) || b.firsts - a.firsts).map((t, k) => [t.i, k]));
+    const lead = D.order[0] ? D.order[0].total : 0;
+    $("#fsSub").innerHTML = [
+      ri >= 0 ? `<span>いま <b>${esc(C.rounds[ri].label)}</b></span>` : "",
+      lastLabel ? `<span>結果は <b>${esc(lastLabel)}</b> まで</span>` : `<span>まだ結果はありません</span>`,
+      D.finalStarted ? `<span>レギュラーの${C.carry * 100}%を持ち越し</span>` : "",
+      source === "sample" || C.sample ? `<span class="fs-sample">サンプル</span>` : "",
+    ].join("");
+    $("#fsRows").innerHTML = D.order.map((t, k) => {
+      const mv = D.played.length > 1 ? prevRank.get(t.i) - k : 0;
+      const move = mv > 0 ? `<span class="fs-move up">▲${mv}</span>` : mv < 0 ? `<span class="fs-move down">▼${-mv}</span>` : `<span class="fs-move">―</span>`;
+      const recent = last != null ? t.perRound[last] : null;
+      const gap = k === 0 ? (D.order[1] ? `2位と ${(Math.round((t.total - D.order[1].total) * 10) / 10).toFixed(1)} 差` : "") : `首位まで ${(Math.round((lead - t.total) * 10) / 10).toFixed(1)}`;
+      return `<div class="fs-row ${k === 0 ? "lead" : ""}" style="--tc:${t.color}">
+        <div class="fs-rank"><b>${k + 1}<sup>${ord(k).slice(1)}</sup></b>${move}</div>
+        <div class="fs-chip"></div>
+        <div class="fs-name"><b>${esc(t.name)}</b><span>${t.members.map(esc).join("・")}</span></div>
+        <div class="fs-stat"><span>1位の回数</span><b>${t.firsts}</b></div>
+        <div class="fs-stat"><span>${lastLabel ? esc(lastLabel) : "直近の節"}</span><b class="${cls(recent || 0)}">${recent != null ? fmt(recent) : "―"}</b></div>
+        <div class="fs-total"><b>${fmt(t.total)}</b><span>${gap}</span></div>
+      </div>`;
+    }).join("");
+  }
+
+  // 開く・閉じる。#board 付きのURLで開くと最初からボードを表示
+  const fs = $("#fs");
+  function openBoard(full) {
+    fs.hidden = false; document.body.style.overflow = "hidden"; if (full) $("#fsClose").focus();
+    if (full && document.fullscreenEnabled) document.documentElement.requestFullscreen().catch(() => {});
+  }
+  function closeBoard() {
+    fs.hidden = true; document.body.style.overflow = "";
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (location.hash === "#board") history.replaceState(null, "", location.pathname + location.search);
+    $("#fsOpen").focus();
+  }
+  $("#fsOpen").addEventListener("click", () => openBoard(true));
+  $("#fsClose").addEventListener("click", closeBoard);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !fs.hidden) closeBoard(); });
+  if (location.hash === "#board") openBoard(false);
 
   function renderChart(D, shown) {
     const W = 900, H = 340, L = 48, Rr = 110, T = 20, B = 36;
