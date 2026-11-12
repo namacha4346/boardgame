@@ -5,21 +5,17 @@ window.LEAGUE = {
   name: "VS TEAMS LEAGUE",
   csvUrl: "",
   points: [5, 1, -1, -3],
-  regular: 8,
+  regular: 4,
   final: 2,
   carry: 0.5,
-  // 各節の期間（月曜〜日曜）
+  // 各節の期間（月曜から days 日間）。レギュラーは2週間、ファイナルは1週間
   rounds: [
-    { label: "第1節", start: "2027-01-04" },
-    { label: "第2節", start: "2027-01-11" },
-    { label: "第3節", start: "2027-01-18" },
-    { label: "第4節", start: "2027-01-25" },
-    { label: "第5節", start: "2027-02-01" },
-    { label: "第6節", start: "2027-02-08" },
-    { label: "第7節", start: "2027-02-15" },
-    { label: "第8節", start: "2027-02-22" },
-    { label: "ファイナル第1節", start: "2027-03-01" },
-    { label: "ファイナル第2節", start: "2027-03-08" }
+    { label: "第1節", start: "2027-01-04", days: 14 },
+    { label: "第2節", start: "2027-01-18", days: 14 },
+    { label: "第3節", start: "2027-02-01", days: 14 },
+    { label: "第4節", start: "2027-02-15", days: 14 },
+    { label: "ファイナル第1節", start: "2027-03-01", days: 7 },
+    { label: "ファイナル第2節", start: "2027-03-08", days: 7 }
   ],
   // チームとメンバー（表示名は結果報告フォームに書く名前と同じにする）
   teams: [
