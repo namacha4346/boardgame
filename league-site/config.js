@@ -6,16 +6,15 @@ window.LEAGUE = {
   csvUrl: "",
   points: [5, 1, -1, -3],
   regular: 4,
-  final: 2,
+  final: 1,
   carry: 0.5,
-  // 各節の期間（月曜から days 日間）。レギュラーは2週間、ファイナルは1週間
+  // 各節の期間（月曜から days 日間）。ファイナルは対面で1日（日付が決まったら start に入れる）
   rounds: [
     { label: "第1節", start: "2027-01-04", days: 14 },
     { label: "第2節", start: "2027-01-18", days: 14 },
     { label: "第3節", start: "2027-02-01", days: 14 },
     { label: "第4節", start: "2027-02-15", days: 14 },
-    { label: "ファイナル第1節", start: "2027-03-01", days: 7 },
-    { label: "ファイナル第2節", start: "2027-03-08", days: 7 }
+    { label: "ファイナル", start: "", days: 1 }
   ],
   // チームとメンバー（表示名は結果報告フォームに書く名前と同じにする）
   teams: [

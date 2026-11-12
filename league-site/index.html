@@ -331,7 +331,7 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
       const recent = last != null ? t.perRound[last] : null;
       const members = t.members.map((m) => { const p = D.players.find((x) => x.name === m); return `<div class="member"><span>${esc(m)}</span><span class="num ${cls(p ? p.pts : 0)}">${p ? fmt(p.pts) : "―"}</span></div>`; }).join("");
       const bars = shown.map((i) => { const v = t.perRound[i]; if (v == null) return `<div class="bar empty"><i style="top:49%;height:2%"></i></div>`; const h = Math.abs(v) / maxAbs * 50; return `<div class="bar"><i style="${v >= 0 ? `bottom:50%;height:${h}%` : `top:50%;height:${h}%`}" title="${esc(C.rounds[i].label)} ${fmt(v)}"></i></div>`; }).join("");
-      const labels = shown.map((i) => `<span>${isFinal(i) ? "F" + (i - C.regular + 1) : i + 1}</span>`).join("");
+      const labels = shown.map((i) => `<span>${isFinal(i) ? (C.final > 1 ? "F" + (i - C.regular + 1) : "F") : i + 1}</span>`).join("");
       return `<article class="team" style="--tc:${t.color}">
         <div class="team-top"><div class="rank">${k + 1}<sup>${ord(k).slice(1)}</sup></div><div class="tname"><small>TEAM</small>${esc(t.name)}</div><div class="total">${fmt(t.total)}<small>POINTS</small></div></div>
         <div class="team-body">
@@ -416,7 +416,7 @@ footer { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line)
     const y = (v) => T + (H - T - B) * (1 - (v - y0) / (y1 - y0));
     const step = Math.max(1, Math.ceil((y1 - y0) / 6 / 5) * 5);
     let grid = ""; for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) grid += `<line x1="${L}" x2="${W - Rr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v === 0 ? 2 : 1}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="Oswald, sans-serif">${v > 0 ? "+" + v : v}</text>`;
-    const xl = shown.map((i, k) => `<text x="${x(k)}" y="${H - 12}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="Oswald, sans-serif">${isFinal(i) ? "F" + (i - C.regular + 1) : i + 1}</text>`).join("");
+    const xl = shown.map((i, k) => `<text x="${x(k)}" y="${H - 12}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="Oswald, sans-serif">${isFinal(i) ? (C.final > 1 ? "F" + (i - C.regular + 1) : "F") : i + 1}</text>`).join("");
     const ends = [];
     const lines = cum.map((pts, ti) => {
       const p = pts.map((v, k) => v == null ? null : [x(k), y(v)]).filter(Boolean); if (!p.length) return "";
