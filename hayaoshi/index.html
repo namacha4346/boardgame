@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>早押しボタン</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f4ef; --ink:#1f1d1a; --sub:#6b665e; --line:#e2ddd3; --card:#fff;
+    --t0:#e5484d; --t1:#3e7bfa; --t2:#2f9e5b; --t3:#e8a317;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17161a; --ink:#f1efe9; --sub:#a39e94; --line:#2e2c31; --card:#211f24; }
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;}
+  body{min-height:100vh; min-height:100dvh}
+  .wrap{max-width:560px; margin:0 auto; padding:16px 16px 40px}
+  h1{font-size:20px; margin:4px 0 14px; letter-spacing:.04em}
+  h2{font-size:16px; margin:0 0 8px}
+  .muted{color:var(--sub); font-size:13px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px}
+  button{font:inherit; border:0; border-radius:12px; cursor:pointer; color:inherit}
+  .btn{background:var(--line); padding:12px 14px; font-weight:600}
+  .btn.primary{background:var(--ink); color:var(--bg)}
+  .btn:disabled{opacity:.4; cursor:default}
+  .row{display:flex; gap:8px; flex-wrap:wrap}
+  .row > *{flex:1}
+  input[type=text], textarea{font:inherit; width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--ink)}
+  textarea{min-height:150px; font-family:ui-monospace,Menlo,monospace; font-size:12px}
+  .hidden{display:none !important}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:#aaa; margin-right:6px; vertical-align:middle}
+  .dot.on{background:#2f9e5b}
+  .err{color:#e5484d; font-size:13px; margin-top:6px}
+  .code{font-size:40px; font-weight:800; letter-spacing:.2em; text-align:center}
+
+  .teams{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0}
+  .teamPick{padding:18px 8px; color:#fff; font-weight:700; font-size:17px; border:3px solid transparent}
+  .teamPick.sel{border-color:var(--ink); transform:scale(1.02)}
+
+  #player{display:flex; flex-direction:column; min-height:calc(100dvh - 32px)}
+  .ptop{display:flex; justify-content:space-between; align-items:center; gap:8px}
+  .badge{color:#fff; padding:6px 12px; border-radius:999px; font-weight:700; font-size:14px}
+  .msg{text-align:center; font-size:20px; font-weight:700; min-height:64px; margin:18px 0 8px; display:flex; align-items:center; justify-content:center; line-height:1.4}
+  .bigwrap{flex:1; display:flex; align-items:center; justify-content:center; padding:10px 0 20px}
+  #bigBtn{width:min(78vw,340px); height:min(78vw,340px); border-radius:50%; color:#fff; font-size:34px; font-weight:800;
+    box-shadow:0 10px 0 rgba(0,0,0,.28), 0 18px 30px rgba(0,0,0,.18); transition:transform .05s, box-shadow .05s, filter .2s;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation}
+  #bigBtn:active:not(:disabled){transform:translateY(8px); box-shadow:0 2px 0 rgba(0,0,0,.28), 0 6px 12px rgba(0,0,0,.18)}
+  #bigBtn:disabled{filter:grayscale(.85) brightness(.85); cursor:default}
+  #bigBtn.first{animation:pulse .8s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  .scoreline{display:flex; gap:6px; justify-content:center; flex-wrap:wrap}
+  .chip{font-size:13px; padding:4px 10px; border-radius:999px; color:#fff; font-weight:700; white-space:nowrap}
+
+  .bigstate{font-size:22px; font-weight:800; text-align:center; padding:16px 8px; border-radius:12px; color:#fff; background:#888; margin-bottom:10px}
+  .order{list-style:none; padding:0; margin:0}
+  .order li{display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--line)}
+  .order li:last-child{border-bottom:0}
+  .rank{font-weight:800; width:24px; text-align:center}
+  .dt{font-variant-numeric:tabular-nums; font-size:13px; color:var(--sub); min-width:64px; text-align:right}
+  .sc{display:grid; grid-template-columns:auto 1fr auto auto auto; gap:8px; align-items:center; margin-bottom:8px}
+  .sc .sw{width:14px; height:14px; border-radius:4px}
+  .sc input{padding:8px}
+  .sc .pts{font-size:22px; font-weight:800; min-width:36px; text-align:center}
+  .sc button{width:38px; height:38px; background:var(--line); font-weight:800}
+  .judge .ok{background:#2f9e5b; color:#fff}
+  .judge .ng{background:#e5484d; color:#fff}
+  details summary{cursor:pointer; font-weight:600}
+  #qr{display:flex; justify-content:center; padding:10px; background:#fff; border-radius:10px; margin:10px auto; width:max-content}
+  .link{word-break:break-all; font-size:12px}
+  .plist div{margin:4px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 初期設定（Firebase） -->
+  <section id="setup" class="hidden">
+    <h1>早押しボタン　初期設定</h1>
+    <div class="card">
+      <h2>Firebaseの設定を貼り付けてください</h2>
+      <p class="muted">Firebaseの「プロジェクトの設定」→「マイアプリ」にある <code>const firebaseConfig = { … }</code> の部分を、そのまま貼り付けます。設定はこの端末に保存され、参加用リンクにも自動で入るので、参加者は何もしなくてOKです。</p>
+      <textarea id="cfgInput" placeholder='const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  databaseURL: "https://....firebasedatabase.app",
+  projectId: "...",
+  ...
+};'></textarea>
+      <div class="err" id="cfgErr"></div>
+      <div style="margin-top:10px"><button class="btn primary" id="cfgSave" style="width:100%">保存する</button></div>
+    </div>
+  </section>
+
+  <!-- ホーム -->
+  <section id="home" class="hidden">
+    <h1>早押しボタン</h1>
+    <div class="card">
+      <h2>司会をする</h2>
+      <button class="btn primary" id="makeRoom" style="width:100%">新しい部屋を作る</button>
+      <div class="muted" id="lastRoomLine" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2>回答者として参加</h2>
+      <input type="text" id="codeInput" maxlength="4" placeholder="部屋コード（4文字）" style="text-transform:uppercase">
+      <div style="margin-top:10px"><button class="btn" id="joinCode" style="width:100%">参加する</button></div>
+    </div>
+    <div class="muted" style="text-align:center"><a href="#" id="resetCfg" style="color:var(--sub)">Firebaseの設定をやり直す</a></div>
+  </section>
+
+  <!-- 参加（チーム選択） -->
+  <section id="join" class="hidden">
+    <h1>早押しボタン <span class="muted" id="jCode"></span></h1>
+    <div class="card">
+      <div class="muted" style="margin-bottom:6px"><span class="dot" id="jDot"></span><span id="jConn">接続中…</span></div>
+      <div style="font-weight:700">チームを選んでください</div>
+      <div class="teams" id="teamPicks"></div>
+      <div style="font-weight:700; margin:12px 0 6px">名前（ニックネーム）</div>
+      <input type="text" id="nameInput" maxlength="12" placeholder="例：なおき">
+      <div style="margin-top:12px"><button class="btn primary" id="joinBtn" style="width:100%" disabled>参加する</button></div>
+    </div>
+  </section>
+
+  <!-- 回答者 -->
+  <section id="player" class="hidden">
+    <div class="ptop">
+      <span class="badge" id="pBadge">チーム</span>
+      <span class="muted"><span class="dot" id="pDot"></span><span id="pName"></span>
+        <button class="btn" id="pChange" style="padding:6px 10px; font-size:12px; margin-left:6px">変更</button></span>
+    </div>
+    <div class="msg" id="pMsg">司会の合図を待っています</div>
+    <div class="bigwrap"><button id="bigBtn" disabled>押す！</button></div>
+    <div class="scoreline" id="pScores"></div>
+    <div class="muted" style="text-align:center; margin-top:10px" id="pSync"></div>
+  </section>
+
+  <!-- 司会 -->
+  <section id="host" class="hidden">
+    <h1>司会画面 <span class="muted" style="font-weight:400">部屋 <b id="hCode"></b>　第<span id="hRound">0</span>問　<span class="dot" id="hDot"></span></span></h1>
+    <div class="bigstate" id="hState">待機中</div>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn primary" id="hNext">次の問題（受付開始）</button>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700; margin-bottom:6px">押した順 <span class="muted">（押した瞬間の時刻で判定）</span></div>
+      <ul class="order" id="hOrder"><li class="muted">まだ誰も押していません</li></ul>
+      <div class="row judge" style="margin-top:10px">
+        <button class="btn ok" id="hOk" disabled>⭕ 正解</button>
+        <button class="btn ng" id="hNg" disabled>❌ 不正解</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="hReopen" disabled>同じ問題をやり直す</button>
+        <button class="btn" id="hClose" disabled>締め切る</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700; margin-bottom:8px">得点</div>
+      <div id="hScores"></div>
+      <div class="row" style="margin-top:6px; align-items:center">
+        <span class="muted" style="flex:0 0 auto">正解</span>
+        <input type="text" id="hPts" value="1" inputmode="numeric" style="max-width:64px; flex:0 0 auto">
+        <span class="muted" style="flex:0 0 auto">お手つき −</span>
+        <input type="text" id="hPen" value="0" inputmode="numeric" style="max-width:64px; flex:0 0 auto">
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700; margin-bottom:6px">参加中 <span class="muted" id="hCount"></span></div>
+      <div id="hPlayers" class="muted plist">まだいません</div>
+      <div class="muted" style="margin-top:6px">かっこ内は通信の往復時間。0.3秒を超える人は電波の良い場所かWi-Fiへ。</div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>参加用QRコード・リンク</summary>
+        <div class="code" id="hCodeBig"></div>
+        <div id="qr"></div>
+        <div class="link muted" id="hLink"></div>
+        <div style="margin-top:8px"><button class="btn" id="hCopy" style="width:100%">リンクをコピー</button></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>設定</summary>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="hT2">2チーム</button>
+          <button class="btn" id="hT3">3チーム</button>
+          <button class="btn" id="hT4">4チーム</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="hSound">効果音：ON</button>
+          <button class="btn" id="hResetScore">得点を0に戻す</button>
+        </div>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+// ===== ここにFirebaseの設定を直接書いておくこともできます（書けば初期設定画面は出ません） =====
+const FIXED_CONFIG = null;
+// ==========================================================================================
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, get, update, onValue, onDisconnect, remove, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const COLORS = ['var(--t0)','var(--t1)','var(--t2)','var(--t3)'];
+const SETTLE_MS = 350;   // 最初に押されてから回答者を確定するまでの待ち時間（遅れて届く「実はもっと早い押し」を待つ）
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem('hy.'+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k,v){ try{ localStorage.setItem('hy.'+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem('hy.'+k); }catch(e){} }
+};
+const show = id => { ['setup','home','join','player','host'].forEach(s => $(s).classList.toggle('hidden', s!==id)); };
+
+// ---------- 設定の読み込み ----------
+function parseConfig(text){
+  const out = {}; const re = /(\w+)\s*:\s*["']([^"']+)["']/g; let m;
+  while((m = re.exec(text))) out[m[1]] = m[2];
+  return out;
+}
+const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
+function readHash(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  return { c: (h.get('c')||'').toUpperCase(), k: h.get('k') };
+}
+let CONFIG = FIXED_CONFIG;
+{
+  const { k } = readHash();
+  if(!CONFIG && k){ try{ const c = JSON.parse(b64d(k)); if(c.databaseURL){ CONFIG = c; LS.set('cfg', c); } }catch(e){} }
+  if(!CONFIG) CONFIG = LS.get('cfg', null);
+}
+
+// ---------- 効果音 ----------
+let actx=null, soundOn = LS.get('sound', true);
+function audio(){ try{ if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); }catch(e){} return actx; }
+function tone(f, st, du, type='square', vol=.18){ const a=audio(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.value=f;
+  g.gain.setValueAtTime(vol, a.currentTime+st); g.gain.exponentialRampToValueAtTime(.001, a.currentTime+st+du);
+  o.connect(g).connect(a.destination); o.start(a.currentTime+st); o.stop(a.currentTime+st+du+.02); }
+const sfx = {
+  buzz(){ if(soundOn){ tone(1046,0,.14); tone(1318,.12,.35); } },
+  press(){ tone(880,0,.12,'triangle',.22); },
+  ok(){ if(soundOn){ tone(784,0,.18,'sine',.25); tone(1046,.16,.18,'sine',.25); tone(1318,.32,.4,'sine',.25); } },
+  ng(){ if(soundOn){ tone(220,0,.5,'sawtooth',.18); tone(207,0,.5,'sawtooth',.12); } },
+  open(){ if(soundOn) tone(660,0,.1,'sine',.18); }
+};
+
+// ---------- 初期設定画面 ----------
+$('cfgSave').onclick = () => {
+  const c = parseConfig($('cfgInput').value);
+  if(!c.apiKey || !c.databaseURL){
+    $('cfgErr').textContent = c.apiKey ? 'databaseURL が見つかりません。Realtime Database を作成してから設定をコピーし直してください。' : '設定が読み取れませんでした。firebaseConfig の { } の中身ごと貼り付けてください。';
+    return;
+  }
+  LS.set('cfg', c); location.reload();
+};
+$('resetCfg').onclick = e => { e.preventDefault(); LS.del('cfg'); location.hash=''; location.reload(); };
+
+if(!CONFIG){ show('setup'); }
+else boot();
+
+function boot(){
+const app = initializeApp(CONFIG);
+const db = getDatabase(app);
+let connected = false;
+onValue(ref(db, '.info/connected'), s => {
+  connected = !!s.val();
+  ['jDot','pDot','hDot'].forEach(id => $(id).classList.toggle('on', connected));
+  $('jConn').textContent = connected ? '接続しました' : '接続中…';
+});
+
+const myId = LS.get('pid', null) || (()=>{ const id = Math.random().toString(36).slice(2,10); LS.set('pid', id); return id; })();
+const joinLink = code => {
+  const base = location.href.split('#')[0];
+  return base + '#c=' + code + (FIXED_CONFIG ? '' : '&k=' + b64e(JSON.stringify({
+    apiKey:CONFIG.apiKey, authDomain:CONFIG.authDomain, databaseURL:CONFIG.databaseURL, projectId:CONFIG.projectId, appId:CONFIG.appId })));
+};
+
+// ---------- 時計あわせ（サーバー時刻との差を測る） ----------
+let offset = 0, rtt = null, synced = false;
+async function syncClock(){
+  const r = ref(db, 'rooms/'+room+'/sync/'+myId);
+  let best = null;
+  for(let i=0;i<5;i++){
+    try{
+      const t0 = Date.now();
+      await set(r, serverTimestamp());
+      const t1 = Date.now();
+      const snap = await get(r);
+      const s = snap.val();
+      if(typeof s === 'number'){
+        const sample = { rtt: t1 - t0, off: s - (t0 + t1)/2 };
+        if(!best || sample.rtt < best.rtt) best = sample;
+      }
+    }catch(e){}
+    await new Promise(res=>setTimeout(res, 120));
+  }
+  if(best){ offset = best.off; rtt = best.rtt; synced = true; }
+  remove(r).catch(()=>{});
+  return best;
+}
+const serverNow = () => Date.now() + offset;
+
+// ---------- ルーティング ----------
+let room = readHash().c;
+let isHost = false;
+if(room){
+  isHost = LS.get('host.'+room, false);
+  if(isHost) startHost(); else startJoin();
+} else {
+  const last = LS.get('lastHostRoom', null);
+  if(last){ const a=document.createElement('a'); a.href='#'; a.textContent='前回の部屋（'+last+'）を開く'; a.style.color='var(--ink)';
+    a.onclick=e=>{e.preventDefault(); location.hash='c='+last; location.reload();}; $('lastRoomLine').appendChild(a); }
+  show('home');
+}
+$('makeRoom').onclick = () => {
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c='';
+  for(let i=0;i<4;i++) c += chars[Math.floor(Math.random()*chars.length)];
+  LS.set('host.'+c, true); LS.set('lastHostRoom', c);
+  location.hash = 'c='+c; location.reload();
+};
+$('joinCode').onclick = () => {
+  const c = $('codeInput').value.trim().toUpperCase(); if(c.length!==4) return;
+  location.hash = 'c='+c; location.reload();
+};
+
+// =========================================================
+// 回答者
+// =========================================================
+let S = null;            // 部屋の状態（司会が書く）
+let me = LS.get('me', { team:null, name:'' });
+let myPressRound = null;
+
+function teamsShown(){
+  if(S && Array.isArray(S.teams)) return S.teams.slice(0, S.nTeams||4);
+  return [{name:'チーム1'},{name:'チーム2'},{name:'チーム3'},{name:'チーム4'}];
+}
+function startJoin(){
+  show('join'); $('jCode').textContent = '部屋 '+room;
+  $('nameInput').value = me.name||'';
+  onValue(ref(db,'rooms/'+room+'/state'), s => { S = s.val(); renderPicks(); renderPlayer(); });
+  renderPicks(); validateJoin();
+  const resync = () => syncClock().then(b => { if(b && !$('player').classList.contains('hidden')) writeMe(); renderPlayer(); });
+  resync();
+  setInterval(resync, 60000);
+}
+function renderPicks(){
+  const box=$('teamPicks'); box.innerHTML='';
+  teamsShown().forEach((t,i)=>{
+    const b=document.createElement('button'); b.className='teamPick'+(me.team===i?' sel':''); b.style.background=COLORS[i];
+    b.textContent=t.name; b.onclick=()=>{ me.team=i; renderPicks(); validateJoin(); }; box.appendChild(b);
+  });
+}
+function validateJoin(){ $('joinBtn').disabled = !(me.team!=null && $('nameInput').value.trim()); }
+$('nameInput').addEventListener('input', validateJoin);
+function writeMe(){
+  const r = ref(db,'rooms/'+room+'/players/'+myId);
+  set(r, { team: me.team, name: me.name, rtt: rtt, at: serverTimestamp() }).catch(()=>{});
+  onDisconnect(r).remove();
+}
+$('joinBtn').onclick = () => {
+  me.name = $('nameInput').value.trim().slice(0,12); LS.set('me', me); audio();
+  writeMe(); show('player'); renderPlayer();
+};
+$('pChange').onclick = () => { remove(ref(db,'rooms/'+room+'/players/'+myId)).catch(()=>{}); show('join'); renderPicks(); };
+
+function renderPlayer(){
+  const t = teamsShown()[me.team] || {name:'チーム'};
+  $('pBadge').textContent = t.name; $('pBadge').style.background = COLORS[me.team]||'#888';
+  $('pName').textContent = me.name;
+  $('pSync').textContent = synced ? ('時計あわせ済み（通信 '+(rtt/1000).toFixed(2)+'秒）') : '時計あわせ中…';
+  const btn=$('bigBtn'); btn.style.background = COLORS[me.team]||'#888'; btn.classList.remove('first');
+  const sc=$('pScores'); sc.innerHTML='';
+  if(S && S.teams) S.teams.slice(0,S.nTeams).forEach((tm,i)=>{ const c=document.createElement('span'); c.className='chip'; c.style.background=COLORS[i]; c.textContent=tm.name+' '+tm.score; sc.appendChild(c); });
+
+  let msg='司会の合図を待っています', can=false, label='押す！';
+  if(!S){ msg='司会が部屋を開くのを待っています'; }
+  else {
+    const order = S.order||[]; const locked = S.locked||[];
+    const rank = order.findIndex(o=>o.pid===myId);
+    const ans = S.answerer ? order.find(o=>o.pid===S.answerer) : null;
+    const teamIn = order.some(o=>o.team===me.team);
+    if(S.phase==='idle'){ msg='司会の合図を待っています'; label='待機'; }
+    else if(S.phase==='closed'){ msg = S.result ? ((S.teams[S.result]?.name||'')+' 正解！') : 'この問題は締め切りました'; label='—'; }
+    else if(locked.includes(me.team)){ msg='お手つき。この問題はもう押せません'; label='×'; }
+    else if(ans && ans.pid===myId){ msg='あなたが回答者です！答えてください'; btn.classList.add('first'); label='回答！'; }
+    else if(ans && ans.team===me.team){ msg='チームの '+ans.name+' さんが回答中'; label='回答中'; }
+    else if(myPressRound===S.round || teamIn){
+      if(rank>=0) msg = (rank+1)+'番目に押しました' + (rank>0 && order[rank].dt!=null ? '（+'+(order[rank].dt/1000).toFixed(2)+'秒）' : '');
+      else msg = teamIn ? 'チームの仲間が先に押しました' : '押しました！ 判定中…';
+      label='押した';
+    }
+    else if(S.phase==='open'){
+      can = true;
+      msg = ans ? ((S.teams[ans.team]?.name||'')+' が回答中（押すと順番待ち）') : '今だ！ 押して！';
+    }
+  }
+  btn.disabled = !can; btn.textContent = label; $('pMsg').textContent = msg;
+}
+$('bigBtn').addEventListener('pointerdown', e => {
+  const tPress = Date.now();             // 押した瞬間を最初に記録
+  e.preventDefault();
+  if($('bigBtn').disabled || !S) return;
+  myPressRound = S.round;
+  set(ref(db,'rooms/'+room+'/buzz/'+S.round+'/'+myId), {
+    t: tPress + offset, srv: serverTimestamp(), team: me.team, name: me.name, synced
+  }).catch(()=>{});
+  sfx.press(); try{ navigator.vibrate && navigator.vibrate(60); }catch(err){}
+  renderPlayer();
+});
+
+// =========================================================
+// 司会
+// =========================================================
+let H = null;                 // 司会のもつ状態
+let buzzes = {};              // 今の問題の押し記録 {pid: {t,srv,team,name}}
+let settleTimer = null, buzzUnsub = null;
+const stateRef = () => ref(db,'rooms/'+room+'/state');
+
+async function startHost(){
+  show('host'); audio();
+  $('hCode').textContent = room; $('hCodeBig').textContent = room;
+  const link = joinLink(room); $('hLink').textContent = link;
+  try{ new QRCode($('qr'), { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }catch(e){ $('qr').textContent='QRコードを表示できませんでした'; }
+  $('hCopy').onclick = async () => { try{ await navigator.clipboard.writeText(link); $('hCopy').textContent='コピーしました'; }catch(e){ $('hCopy').textContent='コピーできませんでした'; } setTimeout(()=>$('hCopy').textContent='リンクをコピー',2000); };
+
+  const snap = await get(stateRef()).catch(()=>null);
+  H = (snap && snap.val()) || {
+    round:0, phase:'idle', nTeams:4,
+    teams:[{name:'チーム1',score:0},{name:'チーム2',score:0},{name:'チーム3',score:0},{name:'チーム4',score:0}],
+    order:[], locked:[], answerer:null, judged:{}, result:null
+  };
+  H.order = H.order||[]; H.locked = H.locked||[]; H.judged = H.judged||{};
+  listenBuzz();
+  onValue(ref(db,'rooms/'+room+'/players'), s => renderPlayers(s.val()||{}));
+  // 古い押し記録を片付け（前の問題）
+  renderHost(); save();
+}
+function save(){ set(stateRef(), H).catch(()=>{}); }
+
+function listenBuzz(){
+  if(buzzUnsub) buzzUnsub();
+  buzzes = {};
+  buzzUnsub = onValue(ref(db,'rooms/'+room+'/buzz/'+H.round), s => {
+    buzzes = s.val()||{};
+    onBuzzChange();
+  });
+}
+function pressTime(b){
+  // 時計あわせが済んでいない／大きくずれている場合はサーバー到着時刻を使う
+  if(typeof b.t!=='number') return b.srv;
+  if(typeof b.srv==='number' && (Math.abs(b.t - b.srv) > 3000 || !b.synced)) return b.srv;
+  return b.t;
+}
+function computeOrder(){
+  const list = Object.entries(buzzes).map(([pid,b])=>({ pid, team:Number(b.team), name:String(b.name||'').slice(0,12), t:pressTime(b) }))
+    .filter(x => x.team>=0 && x.team<H.nTeams && typeof x.t==='number')
+    .sort((a,b)=>a.t-b.t);
+  const seen = new Set(), out=[];
+  for(const x of list){ if(seen.has(x.team)) continue; seen.add(x.team); out.push(x); } // チームごとに最初の1人
+  const t0 = out.length ? out[0].t : 0;
+  return out.map(x=>({ pid:x.pid, team:x.team, name:x.name, dt: x.t - t0 }));
+}
+function nextAnswerer(){
+  return (H.order.find(o => !H.judged[o.pid] && !H.locked.includes(o.team)) || {}).pid || null;
+}
+function onBuzzChange(){
+  if(H.phase!=='open') return;
+  H.order = computeOrder();
+  if(!H.answerer && H.order.length && !settleTimer){
+    // 最初の押しが届いてから少し待って、遅れて届いた「もっと早い押し」も含めて確定
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      H.order = computeOrder();
+      H.answerer = nextAnswerer();
+      if(H.answerer) sfx.buzz();
+      renderHost(); save();
+    }, SETTLE_MS);
+  }
+  renderHost(); save();
+}
+function newQuestion(){
+  if(settleTimer){ clearTimeout(settleTimer); settleTimer=null; }
+  const old = H.round;
+  H.round += 1; H.phase='open'; H.order=[]; H.locked=[]; H.answerer=null; H.judged={}; H.result=null;
+  remove(ref(db,'rooms/'+room+'/buzz/'+old)).catch(()=>{});
+  listenBuzz(); sfx.open(); renderHost(); save();
+}
+const num = (id,d) => { const n=parseInt($(id).value,10); return isNaN(n)?d:n; };
+$('hNext').onclick = newQuestion;
+$('hReopen').onclick = newQuestion;
+$('hOk').onclick = () => {
+  const a = H.order.find(o=>o.pid===H.answerer); if(!a) return;
+  H.judged[a.pid]='ok'; H.teams[a.team].score += num('hPts',1);
+  H.phase='closed'; H.result=a.team; H.answerer=null;
+  sfx.ok(); renderHost(); save();
+};
+$('hNg').onclick = () => {
+  const a = H.order.find(o=>o.pid===H.answerer); if(!a) return;
+  H.judged[a.pid]='ng'; H.teams[a.team].score -= num('hPen',0);
+  if(!H.locked.includes(a.team)) H.locked.push(a.team);
+  H.answerer = nextAnswerer();
+  if(H.locked.length >= H.nTeams){ H.phase='closed'; H.result=null; }
+  sfx.ng(); if(H.answerer) setTimeout(()=>sfx.buzz(), 600);
+  renderHost(); save();
+};
+$('hClose').onclick = () => { H.phase='closed'; H.result=null; H.answerer=null; renderHost(); save(); };
+[2,3,4].forEach(n => $('hT'+n).onclick = () => { H.nTeams=n; renderHost(); save(); });
+$('hSound').onclick = () => { soundOn=!soundOn; LS.set('sound',soundOn); renderHost(); };
+$('hResetScore').onclick = () => {
+  const b=$('hResetScore');
+  if(b.dataset.c!=='1'){ b.dataset.c='1'; b.textContent='もう一度押すと0に戻します'; setTimeout(()=>{b.dataset.c=''; b.textContent='得点を0に戻す';},3000); return; }
+  H.teams.forEach(t=>t.score=0); H.round=0; H.phase='idle'; H.order=[]; H.locked=[]; H.answerer=null; H.judged={}; H.result=null;
+  b.dataset.c=''; b.textContent='得点を0に戻す'; listenBuzz(); renderHost(); save();
+};
+
+function renderHost(){
+  $('hRound').textContent = H.round;
+  const st=$('hState'); const a = H.order.find(o=>o.pid===H.answerer);
+  if(H.phase==='idle'){ st.textContent='待機中'; st.style.background='#888'; }
+  else if(H.phase==='open' && a){ st.textContent = H.teams[a.team].name+'（'+a.name+'）'; st.style.background=COLORS[a.team]; }
+  else if(H.phase==='open' && H.order.length){ st.textContent='判定中…'; st.style.background='#3a3733'; }
+  else if(H.phase==='open'){ st.textContent = H.locked.length ? '受付中（お手つき以外）' : '受付中！'; st.style.background='#3a3733'; }
+  else if(H.phase==='closed'){ if(H.result!=null){ st.textContent=H.teams[H.result].name+' 正解！'; st.style.background=COLORS[H.result]; } else { st.textContent='締め切り'; st.style.background='#888'; } }
+
+  const ol=$('hOrder'); ol.innerHTML='';
+  if(!H.order.length){ const li=document.createElement('li'); li.className='muted'; li.textContent = H.phase==='open'?'押されるのを待っています…':'まだ誰も押していません'; ol.appendChild(li); }
+  H.order.forEach((o,i)=>{
+    const li=document.createElement('li');
+    const r=document.createElement('span'); r.className='rank'; r.textContent=i+1;
+    const c=document.createElement('span'); c.className='chip'; c.style.background=COLORS[o.team]; c.textContent=H.teams[o.team].name;
+    const n=document.createElement('span'); n.textContent=o.name; n.style.flex='1';
+    const d=document.createElement('span'); d.className='dt'; d.textContent = i===0 ? '一番乗り' : '+'+(o.dt/1000).toFixed(2)+'秒';
+    const j=document.createElement('span'); const jd=H.judged[o.pid];
+    j.textContent = jd==='ok'?'⭕':jd==='ng'?'❌':(o.pid===H.answerer?'回答中':''); j.style.minWidth='40px'; j.style.textAlign='right';
+    li.append(r,c,n,d,j); if(jd==='ng') li.style.opacity='.5'; ol.appendChild(li);
+  });
+  $('hOk').disabled = $('hNg').disabled = !(H.phase==='open' && a);
+  $('hReopen').disabled = H.phase==='idle';
+  $('hClose').disabled = H.phase!=='open';
+
+  const box=$('hScores'); box.innerHTML='';
+  H.teams.slice(0,H.nTeams).forEach((t,i)=>{
+    const row=document.createElement('div'); row.className='sc';
+    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=COLORS[i];
+    const inp=document.createElement('input'); inp.type='text'; inp.value=t.name; inp.maxLength=16;
+    inp.onchange=()=>{ t.name=inp.value.trim()||('チーム'+(i+1)); renderHost(); save(); };
+    const mi=document.createElement('button'); mi.textContent='−'; mi.onclick=()=>{t.score--; renderHost(); save();};
+    const p=document.createElement('span'); p.className='pts'; p.textContent=t.score;
+    const pl=document.createElement('button'); pl.textContent='＋'; pl.onclick=()=>{t.score++; renderHost(); save();};
+    row.append(sw,inp,mi,p,pl); box.appendChild(row);
+  });
+  [2,3,4].forEach(n=>$('hT'+n).classList.toggle('primary', H.nTeams===n));
+  $('hSound').textContent='効果音：'+(soundOn?'ON':'OFF');
+}
+function renderPlayers(ps){
+  const list = Object.values(ps).filter(p=>p && p.team!=null);
+  $('hCount').textContent = list.length ? '（'+list.length+'人）' : '';
+  const box=$('hPlayers'); box.innerHTML='';
+  if(!list.length){ box.textContent='まだいません'; return; }
+  for(let i=0;i<H.nTeams;i++){
+    const line=document.createElement('div');
+    const c=document.createElement('span'); c.className='chip'; c.style.background=COLORS[i]; c.textContent=H.teams[i].name; line.appendChild(c);
+    const mem = list.filter(p=>Number(p.team)===i);
+    if(!mem.length){ const s=document.createElement('span'); s.textContent='—'; line.appendChild(s); }
+    mem.forEach(p=>{ const s=document.createElement('span'); s.style.color='var(--ink)';
+      const r = typeof p.rtt==='number' ? (p.rtt/1000).toFixed(2)+'秒' : '計測中';
+      s.textContent = String(p.name||'?').slice(0,12)+'（'+r+'）'; if(p.rtt>300) s.style.color='#e5484d'; line.appendChild(s); });
+    box.appendChild(line);
+  }
+}
+} // boot
+</script>
+</body>
+</html>
