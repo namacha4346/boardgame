@@ -257,10 +257,19 @@ function tone(f, st, du, type='square', vol=.18){ const a=audio(); if(!a) return
   const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.value=f;
   g.gain.setValueAtTime(vol, a.currentTime+st); g.gain.exponentialRampToValueAtTime(.001, a.currentTime+st+du);
   o.connect(g).connect(a.destination); o.start(a.currentTime+st); o.stop(a.currentTime+st+du+.02); }
+// チャイム風の音（基音＋倍音、すっと立ち上がって長く響く）
+function bell(f, st, du, vol=.3){ const a=audio(); if(!a) return;
+  const t=a.currentTime+st, out=a.createGain(); out.gain.value=vol; out.connect(a.destination);
+  [[1,1],[2,.35],[3,.12],[4.2,.05]].forEach(([m,v])=>{
+    const o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.value=f*m;
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.008);
+    g.gain.exponentialRampToValueAtTime(.0001,t+du/(m>1?m*.8:1));
+    o.connect(g).connect(out); o.start(t); o.stop(t+du+.05); });
+}
 const sfx = {
   buzz(){ if(soundOn){ tone(1046,0,.14); tone(1318,.12,.35); } },
   press(){ tone(880,0,.12,'triangle',.22); },
-  ok(){ if(soundOn){ tone(784,0,.18,'sine',.25); tone(1046,.16,.18,'sine',.25); tone(1318,.32,.4,'sine',.25); } },
+  ok(){ if(soundOn){ bell(1319,0,.45,.32); bell(1047,.32,1.3,.34); } },   // ピン（高）→ポーーン（低・長め）
   ng(){ if(soundOn){ tone(220,0,.5,'sawtooth',.18); tone(207,0,.5,'sawtooth',.12); } },
   open(){ if(soundOn) tone(660,0,.1,'sine',.18); }
 };
