@@ -227,6 +227,8 @@ const LS = {
   set(k,v){ try{ localStorage.setItem('hy.'+k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem('hy.'+k); }catch(e){} }
 };
+const arr = x => Array.isArray(x) ? x : (x && typeof x==='object' ? Object.keys(x).sort((a,b)=>a-b).map(k=>x[k]) : []);
+function norm(st){ if(!st || typeof st!=='object') return null; st.teams=arr(st.teams); st.order=arr(st.order); st.locked=arr(st.locked); st.judged=st.judged||{}; if(!st.teams.length) return null; return st; }
 const show = id => { ['setup','home','join','player','host'].forEach(s => $(s).classList.toggle('hidden', s!==id)); };
 
 // ---------- 設定の読み込み ----------
@@ -295,6 +297,8 @@ const joinLink = code => {
     apiKey:CONFIG.apiKey, authDomain:CONFIG.authDomain, databaseURL:CONFIG.databaseURL, projectId:CONFIG.projectId, appId:CONFIG.appId })));
 };
 
+let room = '', isHost = false;
+
 // ---------- 時計あわせ（サーバー時刻との差を測る） ----------
 let offset = 0, rtt = null, synced = false;
 async function syncClock(){
@@ -320,18 +324,6 @@ async function syncClock(){
 }
 const serverNow = () => Date.now() + offset;
 
-// ---------- ルーティング ----------
-let room = readHash().c;
-let isHost = false;
-if(room){
-  isHost = LS.get('host.'+room, false);
-  if(isHost) startHost(); else startJoin();
-} else {
-  const last = LS.get('lastHostRoom', null);
-  if(last){ const a=document.createElement('a'); a.href='#'; a.textContent='前回の部屋（'+last+'）を開く'; a.style.color='var(--ink)';
-    a.onclick=e=>{e.preventDefault(); location.hash='c='+last; location.reload();}; $('lastRoomLine').appendChild(a); }
-  show('home');
-}
 $('makeRoom').onclick = () => {
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c='';
   for(let i=0;i<4;i++) c += chars[Math.floor(Math.random()*chars.length)];
@@ -357,7 +349,7 @@ function teamsShown(){
 function startJoin(){
   show('join'); $('jCode').textContent = '部屋 '+room;
   $('nameInput').value = me.name||'';
-  onValue(ref(db,'rooms/'+room+'/state'), s => { S = s.val(); renderPicks(); renderPlayer(); });
+  onValue(ref(db,'rooms/'+room+'/state'), s => { S = norm(s.val()); renderPicks(); renderPlayer(); });
   renderPicks(); validateJoin();
   const resync = () => syncClock().then(b => { if(b && !$('player').classList.contains('hidden')) writeMe(); renderPlayer(); });
   resync();
@@ -444,7 +436,7 @@ async function startHost(){
   $('hCopy').onclick = async () => { try{ await navigator.clipboard.writeText(link); $('hCopy').textContent='コピーしました'; }catch(e){ $('hCopy').textContent='コピーできませんでした'; } setTimeout(()=>$('hCopy').textContent='リンクをコピー',2000); };
 
   const snap = await get(stateRef()).catch(()=>null);
-  H = (snap && snap.val()) || {
+  H = (snap && norm(snap.val())) || {
     round:0, phase:'idle', nTeams:4,
     teams:[{name:'チーム1',score:0},{name:'チーム2',score:0},{name:'チーム3',score:0},{name:'チーム4',score:0}],
     order:[], locked:[], answerer:null, judged:{}, result:null
@@ -587,6 +579,17 @@ function renderPlayers(ps){
       s.textContent = String(p.name||'?').slice(0,12)+'（'+r+'）'; if(p.rtt>300) s.style.color='#e5484d'; line.appendChild(s); });
     box.appendChild(line);
   }
+}
+// ---------- ルーティング（状態の宣言がすべて済んでから実行） ----------
+room = readHash().c;
+if(room){
+  isHost = LS.get('host.'+room, false);
+  if(isHost) startHost(); else startJoin();
+} else {
+  const last = LS.get('lastHostRoom', null);
+  if(last){ const a=document.createElement('a'); a.href='#'; a.textContent='前回の部屋（'+last+'）を開く'; a.style.color='var(--ink)';
+    a.onclick=e=>{e.preventDefault(); location.hash='c='+last; location.reload();}; $('lastRoomLine').appendChild(a); }
+  show('home');
 }
 } // boot
 </script>
