@@ -270,8 +270,8 @@ const sfx = {
   buzz(){ if(soundOn){ tone(1046,0,.14); tone(1318,.12,.35); } },
   press(){ tone(880,0,.12,'triangle',.22); },
   ok(){ if(soundOn){ // ピンポン ピンポン ピンポーン
-    [0,.36].forEach(t=>{ bell(1319,t,.3,.3); bell(1047,t+.15,.35,.3); });
-    bell(1319,.72,.35,.32); bell(1047,.88,1.4,.34); } },
+    [0,.22].forEach(t=>{ bell(1319,t,.2,.3); bell(1047,t+.1,.24,.3); });
+    bell(1319,.46,.35,.32); bell(1047,.62,1.4,.34); } },
   ng(){ if(soundOn){ tone(220,0,.5,'sawtooth',.18); tone(207,0,.5,'sawtooth',.12); } },
   open(){ if(soundOn) tone(660,0,.1,'sine',.18); }
 };
