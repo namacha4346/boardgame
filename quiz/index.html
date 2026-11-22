@@ -257,21 +257,30 @@ function tone(f, st, du, type='square', vol=.18){ const a=audio(); if(!a) return
   const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.value=f;
   g.gain.setValueAtTime(vol, a.currentTime+st); g.gain.exponentialRampToValueAtTime(.001, a.currentTime+st+du);
   o.connect(g).connect(a.destination); o.start(a.currentTime+st); o.stop(a.currentTime+st+du+.02); }
-// チャイム風の音（基音＋倍音、すっと立ち上がって長く響く）
-function bell(f, st, du, vol=.3){ const a=audio(); if(!a) return;
-  const t=a.currentTime+st, out=a.createGain(); out.gain.value=vol; out.connect(a.destination);
-  [[1,1],[2,.35],[3,.12],[4.2,.05]].forEach(([m,v])=>{
-    const o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.value=f*m;
-    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.008);
-    g.gain.exponentialRampToValueAtTime(.0001,t+du/(m>1?m*.8:1));
-    o.connect(g).connect(out); o.start(t); o.stop(t+du+.05); });
+// チャイム風の音（基音＋倍音＋1オクターブ下の音、残響つき）
+let verb=null;
+function reverb(a){ if(verb) return verb;
+  const len=Math.floor(a.sampleRate*2.4), ir=a.createBuffer(2,len,a.sampleRate);
+  for(let c=0;c<2;c++){ const d=ir.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.2); }
+  const cv=a.createConvolver(); cv.buffer=ir; const g=a.createGain(); g.gain.value=.55; cv.connect(g).connect(a.destination);
+  return verb=cv; }
+function bell(f, st, du, vol=.3, chord=[1]){ const a=audio(); if(!a) return;
+  const t=a.currentTime+st, out=a.createGain(); out.gain.value=vol/Math.sqrt(chord.length);
+  out.connect(a.destination); out.connect(reverb(a));
+  chord.forEach(r=>{ const fr=f*r;
+    [[.5,.45],[1,1],[2,.3],[3,.1],[4.2,.04]].forEach(([m,v])=>{
+      const o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.value=fr*m;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.006);
+      g.gain.exponentialRampToValueAtTime(.0001,t+du/(m>1?m*.7:1));
+      o.connect(g).connect(out); o.start(t); o.stop(t+du+.05); }); });
 }
+const PIN=[1,.75,.5], PON=[1,.75,.5];   // 和音（根音・5度下・1オクターブ下）
 const sfx = {
   buzz(){ if(soundOn){ tone(1046,0,.14); tone(1318,.12,.35); } },
   press(){ tone(880,0,.12,'triangle',.22); },
   ok(){ if(soundOn){ // ピンポン ピンポン ピンポーン
-    [0,.22].forEach(t=>{ bell(1319,t,.2,.3); bell(1047,t+.1,.24,.3); });
-    bell(1319,.46,.35,.32); bell(1047,.62,1.4,.34); } },
+    [0,.22].forEach(t=>{ bell(1319,t,.3,.3,PIN); bell(1047,t+.1,.35,.3,PON); });
+    bell(1319,.46,.5,.32,PIN); bell(1047,.62,2.4,.36,PON); } },
   ng(){ if(soundOn){ tone(220,0,.5,'sawtooth',.18); tone(207,0,.5,'sawtooth',.12); } },
   open(){ if(soundOn) tone(660,0,.1,'sine',.18); }
 };
