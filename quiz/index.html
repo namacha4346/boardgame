@@ -204,7 +204,15 @@
 
 <script type="module">
 // ===== ここにFirebaseの設定を直接書いておくこともできます（書けば初期設定画面は出ません） =====
-const FIXED_CONFIG = null;
+const FIXED_CONFIG = {
+  apiKey: "AIzaSyA7zWSUXVUM6i7wN5-tOZ35gZhpzPSl1m0",
+  authDomain: "quiz-buzzer-f03e5.firebaseapp.com",
+  databaseURL: "https://quiz-buzzer-f03e5-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "quiz-buzzer-f03e5",
+  storageBucket: "quiz-buzzer-f03e5.firebasestorage.app",
+  messagingSenderId: "599480271134",
+  appId: "1:599480271134:web:91a61110697210067b090f"
+};
 // ==========================================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -264,6 +272,7 @@ $('cfgSave').onclick = () => {
   }
   LS.set('cfg', c); location.reload();
 };
+if(FIXED_CONFIG) $("resetCfg").parentElement.classList.add("hidden");
 $('resetCfg').onclick = e => { e.preventDefault(); LS.del('cfg'); location.hash=''; location.reload(); };
 
 if(!CONFIG){ show('setup'); }
