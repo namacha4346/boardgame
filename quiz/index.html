@@ -266,6 +266,7 @@
       <details id="qDetails">
         <summary>問題リスト <span class="muted" id="qCount"></span></summary>
         <div id="qList" style="margin-top:8px"></div>
+        <button class="btn" id="qSample" style="width:100%; margin-top:8px">🎲 サンプル問題を入れる（12問）</button>
         <div style="font-weight:700; margin:14px 0 6px">問題を追加</div>
         <div class="seg" id="qType">
           <button data-t="text" class="on">📝 文字</button>
@@ -883,6 +884,25 @@ $('qAdd').onclick = async () => {
   btn.disabled=false; btn.textContent='追加する';
 };
 $('qFile').onchange = () => { const f=$('qFile').files[0]; $('qFileInfo').textContent = f ? f.name+'（'+(f.size/1024/1024).toFixed(1)+'MB）' : ''; };
+const SAMPLE_Q = [
+  ['日本で一番高い山は何でしょう？','富士山'],
+  ['1年のうちで、昼の時間が一番長い日を何というでしょう？','夏至'],
+  ['オセロで、ゲームを始めるときに盤に置かれている石は全部で何個でしょう？','4個'],
+  ['日本の都道府県で、面積が一番小さいのはどこでしょう？','香川県'],
+  ['トランプ1組から、ジョーカーを除いた枚数は何枚でしょう？','52枚'],
+  ['「カタン」で、勝利点を何点集めると勝ちになるでしょう？','10点'],
+  ['普通のサイコロで、向かい合う面の目を足すといくつになるでしょう？','7'],
+  ['将棋で、成ると「と金」になる駒は何でしょう？','歩兵（歩）'],
+  ['人狼ゲームで、夜に誰か1人を人狼の襲撃から守れる役職は何でしょう？','騎士（狩人）'],
+  ['月の満ち欠けの周期は、およそ何日でしょう？','約29.5日'],
+  ['チェスで、最初に盤に並べる駒は1人あたり何個でしょう？','16個'],
+  ['日本語で「ありがとう」、英語で「サンキュー」。では、フランス語では何というでしょう？','メルシー（Merci）']
+];
+$('qSample').onclick = () => {
+  SAMPLE_Q.forEach(([t,a]) => Q.push({ id:newId(), type:'text', text:t, answer:a, hasMedia:false }));
+  saveQ(); $('qSample').textContent = '12問追加しました';
+  setTimeout(()=>$('qSample').textContent='🎲 サンプル問題を入れる（12問）', 2000);
+};
 $('qBulkAdd').onclick = () => {
   const lines = $('qBulk').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   let n=0;
