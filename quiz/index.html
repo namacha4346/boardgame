@@ -72,6 +72,63 @@
   #qr{display:flex; justify-content:center; padding:10px; background:#fff; border-radius:10px; margin:10px auto; width:max-content}
   .link{word-break:break-all; font-size:12px}
   .plist div{margin:4px 0; display:flex; gap:6px; flex-wrap:wrap; align-items:center}
+
+  /* 問題リスト（司会） */
+  .qrow{display:flex; gap:8px; align-items:center; padding:7px 2px; border-bottom:1px solid var(--line); font-size:14px}
+  .qrow:last-child{border-bottom:0}
+  .qrow .qn{font-weight:800; width:26px; text-align:center}
+  .qrow .qt{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .qrow .qa{color:var(--sub); max-width:30%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .qrow.cur{background:rgba(62,123,250,.12); border-radius:8px}
+  .qrow button{padding:6px 9px; font-size:12px; background:var(--line); border-radius:8px}
+  .seg{display:flex; gap:6px}
+  .seg button{flex:1; padding:9px 4px; background:var(--line); font-weight:600}
+  .seg button.on{background:var(--ink); color:var(--bg)}
+  .curq{font-size:15px; line-height:1.6; background:var(--bg); border-radius:10px; padding:10px; min-height:44px; white-space:pre-wrap}
+  .curq .rest{opacity:.35}
+
+  /* モニター画面（会場に映す） */
+  body.mon{overflow:hidden}
+  body.mon .wrap{max-width:none; padding:0}
+  #monitor{position:fixed; inset:0; background:#0f0e13; color:#f5f3ee; display:grid;
+    grid-template-rows:auto 1fr auto; grid-template-columns:1fr minmax(280px,30vw); gap:1.6vw; padding:2vw}
+  #monitor .mHead{grid-column:1/3; display:flex; align-items:center; gap:1.5vw}
+  #monitor .mNo{font-size:3vw; font-weight:900; letter-spacing:.05em}
+  #monitor .mStat{flex:1; font-size:2.6vw; font-weight:800; padding:.6vw 1.4vw; border-radius:1vw; background:#2a2830; text-align:center; transition:background .2s}
+  #monitor .mQ{background:#1b1a21; border-radius:1.4vw; padding:2.4vw; display:flex; flex-direction:column; gap:1.5vw; min-height:0; overflow:hidden; position:relative}
+  #monitor .mText{font-size:min(4.6vw,8vh); font-weight:800; line-height:1.45; white-space:pre-wrap; word-break:break-all}
+  #monitor .mText .caret{display:inline-block; width:.08em; height:1em; background:#f5f3ee; margin-left:.05em; vertical-align:-.12em; animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  #monitor .mImg{flex:1; min-height:0; display:flex; align-items:center; justify-content:center}
+  #monitor .mImg img{max-width:100%; max-height:100%; object-fit:contain; border-radius:1vw}
+  #monitor .mAudio{display:flex; align-items:flex-end; gap:.6vw; height:8vw}
+  #monitor .mAudio i{display:block; width:1.4vw; background:#3e7bfa; border-radius:.4vw; height:20%}
+  #monitor .mAudio.play i{animation:eq .9s ease-in-out infinite}
+  #monitor .mAudio i:nth-child(2n){animation-delay:-.3s} #monitor .mAudio i:nth-child(3n){animation-delay:-.6s}
+  @keyframes eq{0%,100%{height:20%}50%{height:100%}}
+  #monitor .mAns{position:absolute; left:2vw; right:2vw; bottom:2vw; background:#f5f3ee; color:#0f0e13; border-radius:1.2vw; padding:1.4vw 2vw; font-size:min(4vw,7vh); font-weight:900; text-align:center; transform:translateY(140%); transition:transform .45s cubic-bezier(.2,.9,.3,1.2)}
+  #monitor .mAns.on{transform:none}
+  #monitor .mAns small{display:block; font-size:.45em; font-weight:700; color:#6b665e}
+  #monitor .mSide{background:#1b1a21; border-radius:1.4vw; padding:1.6vw; overflow:hidden}
+  #monitor .mSide h3{margin:0 0 1vw; font-size:1.6vw; color:#a39e94; font-weight:700}
+  #monitor .mOrd{list-style:none; margin:0; padding:0}
+  #monitor .mOrd li{display:flex; align-items:center; gap:1vw; padding:1vw; border-radius:1vw; margin-bottom:.8vw; background:#26242c; font-size:2vw; font-weight:800; animation:pop .25s ease-out}
+  #monitor .mOrd li.ans{outline:.3vw solid #f5f3ee}
+  #monitor .mOrd li.ng{opacity:.35}
+  #monitor .mOrd .rk{font-size:2.6vw; width:2.6vw; text-align:center}
+  #monitor .mOrd .tm{width:1.4vw; height:1.4vw; border-radius:.4vw; flex:0 0 auto}
+  #monitor .mOrd .nm{flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.15}
+  #monitor .mOrd .nm b, #monitor .mOrd .nm small{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #monitor .mOrd .nm small{font-size:1.2vw; color:#a39e94; font-weight:700}
+  #monitor .mOrd .df{font-size:1.4vw; color:#a39e94; font-variant-numeric:tabular-nums}
+  @keyframes pop{from{transform:scale(.9); opacity:0}}
+  #monitor .mScores{grid-column:1/3; display:flex; gap:1.2vw}
+  #monitor .mScores div{flex:1; border-radius:1vw; padding:.8vw 1.2vw; display:flex; justify-content:space-between; align-items:center; font-size:2vw; font-weight:800; color:#fff}
+  #monitor .mScores b{font-size:3vw}
+  #monStart{position:fixed; inset:0; background:rgba(15,14,19,.92); color:#f5f3ee; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; z-index:5; font-size:18px; text-align:center; padding:20px}
+  #monStart button{font-size:22px; padding:18px 30px; background:#f5f3ee; color:#0f0e13; font-weight:800}
+  #monitor .mFs{position:absolute; right:1vw; top:1vw; opacity:.25; font-size:12px; background:#2a2830; color:#f5f3ee; padding:6px 10px}
+  #monitor .mFs:hover{opacity:1}
 </style>
 </head>
 <body>
@@ -137,12 +194,42 @@
     <div class="muted" style="text-align:center; margin-top:10px" id="pSync"></div>
   </section>
 
+  <!-- モニター（会場に映す） -->
+  <section id="monitor" class="hidden">
+    <div class="mHead"><div class="mNo" id="mNo">早押しクイズ</div><div class="mStat" id="mStat">まもなく開始</div></div>
+    <div class="mQ">
+      <div class="mText" id="mText"></div>
+      <div class="mAudio hidden" id="mAudio"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="mImg hidden" id="mImg"></div>
+      <div class="mAns" id="mAns"><small>答え</small><span id="mAnsT"></span></div>
+    </div>
+    <div class="mSide"><h3>押した順</h3><ul class="mOrd" id="mOrd"></ul></div>
+    <div class="mScores" id="mScores"></div>
+    <button class="mFs" id="mFs">全画面</button>
+  </section>
+  <div id="monStart" class="hidden">
+    <div style="font-size:28px; font-weight:800">モニター画面</div>
+    <div>効果音と問題の音を鳴らすために、一度だけ押してください</div>
+    <button id="monGo">開始する</button>
+  </div>
+
   <!-- 司会 -->
   <section id="host" class="hidden">
     <h1>司会画面 <span class="muted" style="font-weight:400">部屋 <b id="hCode"></b>　第<span id="hRound">0</span>問　<span class="dot" id="hDot"></span></span></h1>
     <div class="bigstate" id="hState">待機中</div>
     <div class="row" style="margin-bottom:12px">
       <button class="btn primary" id="hNext">次の問題（受付開始）</button>
+    </div>
+
+    <div class="card" id="hCurCard">
+      <div style="font-weight:700; margin-bottom:6px">いまの問題 <span class="muted" id="hCurNo"></span></div>
+      <div class="curq" id="hCurQ"><span class="muted">問題リストが空のときは、押した順だけをモニターに出します</span></div>
+      <div class="muted" id="hCurA" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="hAns">答えをモニターに出す</button>
+        <button class="btn" id="hResume">続きを流す</button>
+        <button class="btn" id="hFull">全文を出す</button>
+      </div>
     </div>
 
     <div class="card">
@@ -173,6 +260,52 @@
       <div style="font-weight:700; margin-bottom:6px">参加中 <span class="muted" id="hCount"></span></div>
       <div id="hPlayers" class="muted plist">まだいません</div>
       <div class="muted" style="margin-top:6px">かっこ内は通信の往復時間。0.3秒を超える人は電波の良い場所かWi-Fiへ。</div>
+    </div>
+
+    <div class="card">
+      <details id="qDetails">
+        <summary>問題リスト <span class="muted" id="qCount"></span></summary>
+        <div id="qList" style="margin-top:8px"></div>
+        <div style="font-weight:700; margin:14px 0 6px">問題を追加</div>
+        <div class="seg" id="qType">
+          <button data-t="text" class="on">📝 文字</button>
+          <button data-t="image">🖼 画像</button>
+          <button data-t="audio">🎵 音</button>
+        </div>
+        <textarea id="qText" placeholder="問題文（画像・音の問題では「この曲のタイトルは？」など）" style="min-height:70px; margin-top:8px; font-family:inherit; font-size:15px"></textarea>
+        <input type="text" id="qAnswer" placeholder="答え" style="margin-top:8px">
+        <div id="qFileWrap" class="hidden" style="margin-top:8px">
+          <input type="file" id="qFile">
+          <div class="muted" id="qFileInfo"></div>
+        </div>
+        <div class="err" id="qErr"></div>
+        <button class="btn primary" id="qAdd" style="width:100%; margin-top:8px">追加する</button>
+        <details style="margin-top:12px">
+          <summary class="muted">まとめて貼り付ける（文字の問題）</summary>
+          <p class="muted">1行に1問。問題と答えは「｜」かタブで区切ります。例：<br>日本一高い山は？｜富士山</p>
+          <textarea id="qBulk" style="font-family:inherit; font-size:14px; min-height:110px"></textarea>
+          <button class="btn" id="qBulkAdd" style="width:100%; margin-top:8px">まとめて追加</button>
+        </details>
+        <div class="row" style="margin-top:12px; align-items:center">
+          <span class="muted" style="flex:0 0 auto">問題文の流れる速さ</span>
+          <div class="seg" id="qSpeed" style="flex:1">
+            <button data-s="5">ゆっくり</button><button data-s="8">ふつう</button><button data-s="12">はやい</button>
+          </div>
+        </div>
+        <label class="muted" style="display:flex; gap:8px; align-items:center; margin-top:10px">
+          <input type="checkbox" id="qAuto"> 正解が出たら自動で答えをモニターに出す
+        </label>
+      </details>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>モニター画面（会場に映す）</summary>
+        <p class="muted">会場のテレビやプロジェクターにつないだPC・タブレットで、このリンクを開いてください。問題文・押した順・得点・答えが大きく表示されます。モニターが開いている間は、効果音もモニター側から鳴ります。</p>
+        <div class="link muted" id="hMonLink"></div>
+        <div style="margin-top:8px"><button class="btn" id="hMonCopy" style="width:100%">モニター用リンクをコピー</button></div>
+        <div class="muted" id="hMonState" style="margin-top:6px"></div>
+      </details>
     </div>
 
     <div class="card">
@@ -229,7 +362,7 @@ const LS = {
 };
 const arr = x => Array.isArray(x) ? x : (x && typeof x==='object' ? Object.keys(x).sort((a,b)=>a-b).map(k=>x[k]) : []);
 function norm(st){ if(!st || typeof st!=='object') return null; st.teams=arr(st.teams); st.order=arr(st.order); st.locked=arr(st.locked); st.judged=st.judged||{}; if(!st.teams.length) return null; return st; }
-const show = id => { ['setup','home','join','player','host'].forEach(s => $(s).classList.toggle('hidden', s!==id)); };
+const show = id => { ['setup','home','join','player','host','monitor'].forEach(s => $(s).classList.toggle('hidden', s!==id)); };
 
 // ---------- 設定の読み込み ----------
 function parseConfig(text){
@@ -241,7 +374,7 @@ const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').repla
 const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
 function readHash(){
   const h = new URLSearchParams(location.hash.slice(1));
-  return { c: (h.get('c')||'').toUpperCase(), k: h.get('k') };
+  return { c: (h.get('c')||'').toUpperCase(), k: h.get('k'), m: h.get('m')==='1' };
 }
 let CONFIG = FIXED_CONFIG;
 {
@@ -306,7 +439,7 @@ const db = getDatabase(app);
 let connected = false;
 onValue(ref(db, '.info/connected'), s => {
   connected = !!s.val();
-  ['jDot','pDot','hDot'].forEach(id => $(id).classList.toggle('on', connected));
+  ['jDot','pDot','hDot'].forEach(id => $(id).classList.toggle('on', connected)); monConnected = connected;
   $('jConn').textContent = connected ? '接続しました' : '接続中…';
 });
 
@@ -317,7 +450,10 @@ const joinLink = code => {
     apiKey:CONFIG.apiKey, authDomain:CONFIG.authDomain, databaseURL:CONFIG.databaseURL, projectId:CONFIG.projectId, appId:CONFIG.appId })));
 };
 
-let room = '', isHost = false;
+let room = '', isHost = false, monConnected = false;
+// 問題文の表示文字数／音の再生位置（司会とモニターで同じ計算）
+function revealElapsed(rv){ if(!rv) return 0; const now = (rv.paused!=null) ? rv.paused : serverNow(); return Math.max(0, now - rv.start); }
+function revealCount(rv, text, speed){ const L=[...(text||'')].length; if(!rv || rv.full) return L; return Math.min(L, Math.floor(revealElapsed(rv) * (speed||8) / 1000)); }
 
 // ---------- 時計あわせ（サーバー時刻との差を測る） ----------
 let offset = 0, rtt = null, synced = false;
@@ -446,6 +582,10 @@ $('bigBtn').addEventListener('pointerdown', e => {
 let H = null;                 // 司会のもつ状態
 let buzzes = {};              // 今の問題の押し記録 {pid: {t,srv,team,name}}
 let settleTimer = null, buzzUnsub = null;
+let Q = [];                   // 問題リスト [{id,type,text,answer,hasMedia}]
+let monitorsOn = 0;           // モニター画面が開いている数（開いていれば効果音はモニター側で鳴らす）
+const hs = name => { if(!monitorsOn) sfx[name](); };
+const monLink = code => location.href.split('#')[0] + '#c=' + code + '&m=1';
 const stateRef = () => ref(db,'rooms/'+room+'/state');
 
 async function startHost(){
@@ -462,6 +602,14 @@ async function startHost(){
     order:[], locked:[], answerer:null, judged:{}, result:null
   };
   H.order = H.order||[]; H.locked = H.locked||[]; H.judged = H.judged||{};
+  if(H.qi==null) H.qi = -1; if(H.speed==null) H.speed = 8; if(H.autoAns==null) H.autoAns = true;
+  if(H.rv===undefined) H.rv = null; if(H.showAns==null) H.showAns = false;
+  syncClock();
+  onValue(ref(db,'rooms/'+room+'/qs'), s => { Q = arr(s.val()); renderQList(); renderCur(); });
+  onValue(ref(db,'rooms/'+room+'/monitors'), s => { monitorsOn = Object.keys(s.val()||{}).length; renderMonState(); });
+  const ml = monLink(room); $('hMonLink').textContent = ml;
+  $('hMonCopy').onclick = async () => { try{ await navigator.clipboard.writeText(ml); $('hMonCopy').textContent='コピーしました'; }catch(e){ $('hMonCopy').textContent='コピーできませんでした'; } setTimeout(()=>$('hMonCopy').textContent='モニター用リンクをコピー',2000); };
+  setInterval(renderCur, 150);
   listenBuzz();
   onValue(ref(db,'rooms/'+room+'/players'), s => renderPlayers(s.val()||{}));
   // 古い押し記録を片付け（前の問題）
@@ -490,41 +638,54 @@ function computeOrder(){
   const seen = new Set(), out=[];
   for(const x of list){ if(seen.has(x.team)) continue; seen.add(x.team); out.push(x); } // チームごとに最初の1人
   const t0 = out.length ? out[0].t : 0;
-  return out.map(x=>({ pid:x.pid, team:x.team, name:x.name, dt: x.t - t0 }));
+  return out.map(x=>({ pid:x.pid, team:x.team, name:x.name, t:x.t, dt: x.t - t0 }));
 }
 function nextAnswerer(){
   return (H.order.find(o => !H.judged[o.pid] && !H.locked.includes(o.team)) || {}).pid || null;
 }
+function pauseOnBuzz(){
+  if(!H.rv || H.rv.paused!=null) return;
+  const from = H.rv.resumed || H.rv.start;
+  const ts = H.order.filter(o => !H.judged[o.pid] && !H.locked.includes(o.team) && typeof o.t==='number' && o.t >= from - 50).map(o=>o.t);
+  if(ts.length) H.rv.paused = Math.max(H.rv.start, Math.min(...ts));
+}
 function onBuzzChange(){
   if(H.phase!=='open') return;
   H.order = computeOrder();
+  pauseOnBuzz();
   if(!H.answerer && H.order.length && !settleTimer){
     // 最初の押しが届いてから少し待って、遅れて届いた「もっと早い押し」も含めて確定
     settleTimer = setTimeout(() => {
       settleTimer = null;
       H.order = computeOrder();
+      if(H.rv && H.rv.paused!=null && !H.rv.resumed){ H.rv.paused = null; pauseOnBuzz(); } // もっと早い押しが届いていたら、その時刻で止め直す
       H.answerer = nextAnswerer();
-      if(H.answerer) sfx.buzz();
+      if(H.answerer) hs('buzz');
       renderHost(); save();
     }, SETTLE_MS);
   }
   renderHost(); save();
 }
-function newQuestion(){
+function startQuestion(idx){
   if(settleTimer){ clearTimeout(settleTimer); settleTimer=null; }
   const old = H.round;
   H.round += 1; H.phase='open'; H.order=[]; H.locked=[]; H.answerer=null; H.judged={}; H.result=null;
+  H.qi = (idx!=null && idx>=0 && idx<Q.length) ? idx : -1;
+  H.rv = H.qi>=0 ? { start: serverNow() + 700, paused: null, full: false, resumed: null } : null;
+  H.showAns = false;
   remove(ref(db,'rooms/'+room+'/buzz/'+old)).catch(()=>{});
-  listenBuzz(); sfx.open(); renderHost(); save();
+  listenBuzz(); hs('open'); renderHost(); renderQList(); save();
 }
+const newQuestion = () => startQuestion(Q.length && H.qi+1 < Q.length ? H.qi+1 : -1);
 const num = (id,d) => { const n=parseInt($(id).value,10); return isNaN(n)?d:n; };
 $('hNext').onclick = newQuestion;
-$('hReopen').onclick = newQuestion;
+$('hReopen').onclick = () => startQuestion(H.qi);
 $('hOk').onclick = () => {
   const a = H.order.find(o=>o.pid===H.answerer); if(!a) return;
   H.judged[a.pid]='ok'; H.teams[a.team].score += num('hPts',1);
   H.phase='closed'; H.result=a.team; H.answerer=null;
-  sfx.ok(); renderHost(); save();
+  if(H.autoAns && H.qi>=0) H.showAns = true;
+  hs('ok'); renderHost(); save();
 };
 $('hNg').onclick = () => {
   const a = H.order.find(o=>o.pid===H.answerer); if(!a) return;
@@ -532,7 +693,7 @@ $('hNg').onclick = () => {
   if(!H.locked.includes(a.team)) H.locked.push(a.team);
   H.answerer = nextAnswerer();
   if(H.locked.length >= H.nTeams){ H.phase='closed'; H.result=null; }
-  sfx.ng(); if(H.answerer) setTimeout(()=>sfx.buzz(), 600);
+  hs('ng'); if(H.answerer) setTimeout(()=>hs('buzz'), 600);
   renderHost(); save();
 };
 $('hClose').onclick = () => { H.phase='closed'; H.result=null; H.answerer=null; renderHost(); save(); };
@@ -541,7 +702,7 @@ $('hSound').onclick = () => { soundOn=!soundOn; LS.set('sound',soundOn); renderH
 $('hResetScore').onclick = () => {
   const b=$('hResetScore');
   if(b.dataset.c!=='1'){ b.dataset.c='1'; b.textContent='もう一度押すと0に戻します'; setTimeout(()=>{b.dataset.c=''; b.textContent='得点を0に戻す';},3000); return; }
-  H.teams.forEach(t=>t.score=0); H.round=0; H.phase='idle'; H.order=[]; H.locked=[]; H.answerer=null; H.judged={}; H.result=null;
+  H.teams.forEach(t=>t.score=0); H.round=0; H.phase='idle'; H.order=[]; H.locked=[]; H.answerer=null; H.judged={}; H.result=null; H.qi=-1; H.rv=null; H.showAns=false;
   b.dataset.c=''; b.textContent='得点を0に戻す'; listenBuzz(); renderHost(); save();
 };
 
@@ -584,6 +745,227 @@ function renderHost(){
   [2,3,4].forEach(n=>$('hT'+n).classList.toggle('primary', H.nTeams===n));
   $('hSound').textContent='効果音：'+(soundOn?'ON':'OFF');
 }
+// ----- いまの問題（司会） -----
+$('hAns').onclick = () => { H.showAns = !H.showAns; renderCur(); save(); };
+$('hResume').onclick = () => {
+  if(!H.rv || H.rv.paused==null) return;
+  const el = H.rv.paused - H.rv.start, now = serverNow() + 300;
+  H.rv.start = now - el; H.rv.paused = null; H.rv.resumed = now;
+  renderCur(); save();
+};
+$('hFull').onclick = () => { if(!H.rv) return; H.rv.full = true; renderCur(); save(); };
+function renderCur(){
+  if(!H) return;
+  const q = H.qi>=0 ? Q[H.qi] : null;
+  const box = $('hCurQ'); box.innerHTML = '';
+  $('hCurNo').textContent = q ? '第'+(H.qi+1)+'問／全'+Q.length+'問' : (Q.length ? '（問題を出していません）' : '');
+  if(!q){
+    const m=document.createElement('span'); m.className='muted';
+    m.textContent = Q.length ? '「次の問題」で第'+(Math.min(H.qi+1,Q.length-1)+1)+'問を出します' : '問題リストが空のときは、押した順だけをモニターに出します';
+    if(Q.length && H.qi+1>=Q.length && H.qi>=0) m.textContent='問題リストの最後まで出しました';
+    box.appendChild(m); $('hCurA').textContent='';
+  } else {
+    const chars=[...(q.text||'')], n=revealCount(H.rv, q.text, H.speed);
+    const icon = q.type==='image'?'🖼 ':q.type==='audio'?'🎵 ':'';
+    const a=document.createElement('span'); a.textContent = icon + chars.slice(0,n).join('');
+    const b=document.createElement('span'); b.className='rest'; b.textContent = chars.slice(n).join('');
+    box.append(a,b);
+    $('hCurA').textContent = '答え：' + (q.answer||'（未入力）') + (H.showAns ? '　［モニターに表示中］' : '');
+  }
+  const paused = !!(H.rv && H.rv.paused!=null && !H.rv.full);
+  $('hAns').disabled = !q; $('hAns').textContent = H.showAns ? '答えを隠す' : '答えをモニターに出す';
+  $('hResume').disabled = !(q && paused && !H.answerer && H.phase==='open');
+  $('hFull').disabled = !(q && H.rv && !H.rv.full);
+  const nx = Q.length && H.qi+1 < Q.length ? '（第'+(H.qi+2)+'問）' : '';
+  $('hNext').textContent = '次の問題'+nx+'（受付開始）';
+}
+function renderMonState(){
+  $('hMonState').textContent = monitorsOn ? '● モニター接続中（効果音はモニターから鳴ります）' : 'モニターは開いていません（効果音はこの端末から鳴ります）';
+}
+
+// ----- 問題リスト -----
+let qType = 'text';
+document.querySelectorAll('#qType button').forEach(b => b.onclick = () => {
+  qType = b.dataset.t;
+  document.querySelectorAll('#qType button').forEach(x=>x.classList.toggle('on', x===b));
+  $('qFileWrap').classList.toggle('hidden', qType==='text');
+  $('qFile').accept = qType==='image' ? 'image/*' : 'audio/*';
+  $('qFile').value=''; $('qFileInfo').textContent='';
+});
+document.querySelectorAll('#qSpeed button').forEach(b => b.onclick = () => { H.speed = Number(b.dataset.s); renderQList(); save(); });
+$('qAuto').onchange = () => { H.autoAns = $('qAuto').checked; save(); };
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+function saveQ(){ set(ref(db,'rooms/'+room+'/qs'), Q).catch(()=>{ $('qErr').textContent='保存できませんでした。通信を確認してください'; }); }
+function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+async function shrinkImage(file){
+  const url = await readAsDataURL(file);
+  const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  const k = Math.min(1, 1600/Math.max(img.width,img.height));
+  const c=document.createElement('canvas'); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg', .85);
+}
+$('qAdd').onclick = async () => {
+  $('qErr').textContent='';
+  const text=$('qText').value.trim(), answer=$('qAnswer').value.trim(), f=$('qFile').files[0];
+  if(qType==='text' && !text){ $('qErr').textContent='問題文を入れてください'; return; }
+  if(qType!=='text' && !f){ $('qErr').textContent = qType==='image' ? '画像を選んでください' : '音のファイルを選んでください'; return; }
+  const btn=$('qAdd'); btn.disabled=true; btn.textContent='追加中…';
+  try{
+    const id=newId(); let media=null;
+    if(f){
+      media = qType==='image' ? await shrinkImage(f) : await readAsDataURL(f);
+      if(media.length > 8*1024*1024){ throw new Error('big'); }
+      await set(ref(db,'rooms/'+room+'/media/'+id), media);
+    }
+    Q.push({ id, type:qType, text, answer, hasMedia: !!media }); saveQ();
+    $('qText').value=''; $('qAnswer').value=''; $('qFile').value=''; $('qFileInfo').textContent='';
+  }catch(e){
+    $('qErr').textContent = e && e.message==='big' ? 'ファイルが大きすぎます（音は5MBくらいまで）。短く切ったものを使ってください' : '追加できませんでした。もう一度試してください';
+  }
+  btn.disabled=false; btn.textContent='追加する';
+};
+$('qFile').onchange = () => { const f=$('qFile').files[0]; $('qFileInfo').textContent = f ? f.name+'（'+(f.size/1024/1024).toFixed(1)+'MB）' : ''; };
+$('qBulkAdd').onclick = () => {
+  const lines = $('qBulk').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  let n=0;
+  for(const l of lines){ const [t,...rest] = l.split(/\t|｜|\|/); if(!t.trim()) continue; Q.push({ id:newId(), type:'text', text:t.trim(), answer:rest.join('／').trim(), hasMedia:false }); n++; }
+  if(n){ saveQ(); $('qBulk').value=''; $('qBulkAdd').textContent=n+'問追加しました'; setTimeout(()=>$('qBulkAdd').textContent='まとめて追加',2000); }
+};
+function renderQList(){
+  if(!H) return;
+  $('qCount').textContent = Q.length ? '（'+Q.length+'問）' : '（まだありません）';
+  document.querySelectorAll('#qSpeed button').forEach(b=>b.classList.toggle('on', Number(b.dataset.s)===H.speed));
+  $('qAuto').checked = !!H.autoAns;
+  const box=$('qList'); box.innerHTML='';
+  if(!Q.length){ box.innerHTML='<div class="muted">下のフォームから問題を追加してください</div>'; return; }
+  Q.forEach((q,i)=>{
+    const row=document.createElement('div'); row.className='qrow'+(i===H.qi?' cur':'');
+    const n=document.createElement('span'); n.className='qn'; n.textContent=i+1;
+    const t=document.createElement('span'); t.className='qt'; t.textContent=(q.type==='image'?'🖼 ':q.type==='audio'?'🎵 ':'')+(q.text||'（問題文なし）');
+    const a=document.createElement('span'); a.className='qa'; a.textContent=q.answer||'';
+    const go=document.createElement('button'); go.textContent='出す'; go.onclick=()=>startQuestion(i);
+    const up=document.createElement('button'); up.textContent='↑'; up.disabled=i===0;
+    up.onclick=()=>{ [Q[i-1],Q[i]]=[Q[i],Q[i-1]]; if(H.qi===i) H.qi=i-1; else if(H.qi===i-1) H.qi=i; saveQ(); save(); };
+    const del=document.createElement('button'); del.textContent='✕';
+    del.onclick=()=>{ if(del.dataset.c!=='1'){ del.dataset.c='1'; del.textContent='消す?'; setTimeout(()=>{del.dataset.c=''; del.textContent='✕';},2500); return; }
+      if(q.hasMedia) remove(ref(db,'rooms/'+room+'/media/'+q.id)).catch(()=>{});
+      Q.splice(i,1); if(H.qi===i){ H.qi=-1; H.rv=null; H.showAns=false; } else if(H.qi>i) H.qi--; saveQ(); save(); };
+    row.append(n,t,a,go,up,del); box.appendChild(row);
+  });
+}
+
+// =========================================================
+// モニター（会場に映す）
+// =========================================================
+let M = null, MQ = [], mPrev = null, mMedia = {}, mAudioEl = null, mNgUntil = 0;
+async function startMonitor(){
+  document.body.classList.add('mon'); show('monitor');
+  $('monStart').classList.remove('hidden');
+  $('monGo').onclick = () => {
+    audio(); mAudioEl = new Audio(); mAudioEl.preload='auto';
+    $('monStart').classList.add('hidden');
+    try{ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{}); }catch(e){}
+  };
+  $('mFs').onclick = () => { try{ document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }catch(e){} };
+  const mr = ref(db,'rooms/'+room+'/monitors/'+myId);
+  onValue(ref(db,'.info/connected'), s => { if(s.val()){ set(mr, true).catch(()=>{}); onDisconnect(mr).remove(); } });
+  syncClock(); setInterval(syncClock, 60000);
+  onValue(ref(db,'rooms/'+room+'/qs'), s => { MQ = arr(s.val()); });
+  onValue(ref(db,'rooms/'+room+'/state'), s => { const st = norm(s.val()); monSounds(mPrev, st); mPrev = M = st; renderMonitor(); });
+  const loop = () => { monTick(); requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+}
+function monSounds(a, b){
+  if(!a || !b) return;
+  if(b.round!==a.round && b.phase==='open'){ sfx.open(); mNgUntil = 0; }
+  if(b.answerer && b.answerer!==a.answerer) sfx.buzz();
+  for(const pid in (b.judged||{})){
+    if((a.judged||{})[pid]) continue;
+    if(b.judged[pid]==='ok'){ sfx.ok(); mNgUntil = 0; }
+    if(b.judged[pid]==='ng'){ sfx.ng(); mNgUntil = Date.now()+1400; }
+  }
+}
+function monQ(){ return (M && M.qi>=0) ? MQ[M.qi] : null; }
+function renderMonitor(){
+  if(!M) return;
+  const q = monQ();
+  $('mNo').textContent = q ? '第'+(M.qi+1)+'問' : (M.round ? '第'+M.round+'問' : '早押しクイズ');
+  // 画像・音
+  $('mImg').classList.toggle('hidden', !(q && q.type==='image'));
+  $('mAudio').classList.toggle('hidden', !(q && q.type==='audio'));
+  if(q && q.hasMedia && !(q.id in mMedia)){
+    mMedia[q.id] = null;
+    get(ref(db,'rooms/'+room+'/media/'+q.id)).then(s=>{ mMedia[q.id]=s.val(); renderMonitor(); }).catch(()=>{ delete mMedia[q.id]; });
+  }
+  if(q && q.type==='image'){
+    const url = mMedia[q.id];
+    const cur = $('mImg').querySelector('img');
+    if(url && (!cur || cur.dataset.id!==q.id)){ $('mImg').innerHTML=''; const im=document.createElement('img'); im.src=url; im.dataset.id=q.id; $('mImg').appendChild(im); }
+    if(!url) $('mImg').innerHTML='';
+  } else $('mImg').innerHTML='';
+  // 答え
+  $('mAnsT').textContent = q ? (q.answer||'') : '';
+  $('mAns').classList.toggle('on', !!(q && M.showAns && q.answer));
+  // 押した順
+  const ol=$('mOrd'); ol.innerHTML='';
+  (M.order||[]).forEach((o,i)=>{
+    const li=document.createElement('li'); const jd=(M.judged||{})[o.pid];
+    if(o.pid===M.answerer) li.classList.add('ans'); if(jd==='ng') li.classList.add('ng');
+    const rk=document.createElement('span'); rk.className='rk'; rk.textContent=i+1;
+    const tm=document.createElement('span'); tm.className='tm'; tm.style.background=COLORS[o.team];
+    const nm=document.createElement('span'); nm.className='nm'; const nb=document.createElement('b'); nb.textContent=o.name; const ns=document.createElement('small'); ns.textContent=M.teams[o.team]?.name||''; nm.append(nb,ns);
+    const df=document.createElement('span'); df.className='df'; df.textContent = jd==='ok'?'⭕':jd==='ng'?'❌':(i===0?'':'+'+(o.dt/1000).toFixed(2)+'秒');
+    li.append(rk,tm,nm,df); ol.appendChild(li);
+  });
+  // 得点
+  const sc=$('mScores'); sc.innerHTML='';
+  M.teams.slice(0,M.nTeams).forEach((t,i)=>{ const d=document.createElement('div'); d.style.background=COLORS[i];
+    const n=document.createElement('span'); n.textContent=t.name; const b=document.createElement('b'); b.textContent=t.score; d.append(n,b); sc.appendChild(d); });
+}
+function monStatus(){
+  const st=$('mStat'); if(!M){ st.textContent='まもなく開始'; return; }
+  const a=(M.order||[]).find(o=>o.pid===M.answerer);
+  let txt='まもなく開始', bg='#2a2830';
+  if(Date.now() < mNgUntil){ txt='不正解…'; bg='#e5484d'; }
+  else if(M.phase==='open' && a){ txt=(M.teams[a.team]?.name||'')+'　'+a.name+' さん　回答中'; bg=COLORS[a.team]; }
+  else if(M.phase==='open' && (M.order||[]).some(o=>!(M.judged||{})[o.pid] && !(M.locked||[]).includes(o.team))){ txt='判定中…'; }
+  else if(M.phase==='open'){ txt = (M.locked||[]).length ? '受付中（お手つき以外）' : '受付中'; }
+  else if(M.phase==='closed'){ if(M.result!=null){ txt=(M.teams[M.result]?.name||'')+'　正解！'; bg=COLORS[M.result]; } else txt='締め切り'; }
+  if(st.textContent!==txt) st.textContent=txt;
+  st.style.background=bg;
+}
+function monTick(){
+  if(!M) return;
+  monStatus();
+  const q = monQ();
+  // 問題文（1文字ずつ）
+  const box=$('mText');
+  if(!q){ if(box.dataset.k!=='none'){ box.textContent=''; box.dataset.k='none'; } }
+  else {
+    const n = revealCount(M.rv, q.text, M.speed);
+    const k = q.id+':'+n+':'+(M.rv&&M.rv.paused!=null);
+    if(box.dataset.k!==k){
+      box.dataset.k=k; box.textContent=[...(q.text||'')].slice(0,n).join('');
+      const L=[...(q.text||'')].length;
+      if(n<L && !(M.rv && M.rv.paused!=null)){ const c=document.createElement('span'); c.className='caret'; box.appendChild(c); }
+    }
+  }
+  // 音の問題
+  const au = mAudioEl;
+  if(au){
+    const url = q && q.type==='audio' ? mMedia[q.id] : null;
+    if(!url){ if(!au.paused) au.pause(); $('mAudio').classList.remove('play'); return; }
+    if(au.dataset.id!==q.id){ au.src=url; au.dataset.id=q.id; }
+    const rv=M.rv, el=revealElapsed(rv)/1000;
+    const playing = rv && rv.paused==null && serverNow() >= rv.start && !(au.duration && el >= au.duration);
+    if(playing){
+      if(au.paused){ try{ au.currentTime = el; }catch(e){} au.play().catch(()=>{}); }
+      else if(Math.abs(au.currentTime - el) > .35){ try{ au.currentTime = el; }catch(e){} }
+    } else if(!au.paused){ au.pause(); try{ au.currentTime = Math.min(el, au.duration||el); }catch(e){} }
+    $('mAudio').classList.toggle('play', !!playing && !au.paused);
+  }
+}
+
 function renderPlayers(ps){
   const list = Object.values(ps).filter(p=>p && p.team!=null);
   $('hCount').textContent = list.length ? '（'+list.length+'人）' : '';
@@ -604,7 +986,7 @@ function renderPlayers(ps){
 room = readHash().c;
 if(room){
   isHost = LS.get('host.'+room, false);
-  if(isHost) startHost(); else startJoin();
+  if(readHash().m) startMonitor(); else if(isHost) startHost(); else startJoin();
 } else {
   const last = LS.get('lastHostRoom', null);
   if(last){ const a=document.createElement('a'); a.href='#'; a.textContent='前回の部屋（'+last+'）を開く'; a.style.color='var(--ink)';
