@@ -206,6 +206,7 @@
     <div class="mSide"><h3>押した順</h3><ul class="mOrd" id="mOrd"></ul></div>
     <div class="mScores" id="mScores"></div>
     <button class="mFs" id="mFs">全画面</button>
+    <div id="mTtsWarn" class="hidden" style="position:absolute; left:1vw; bottom:.4vw; font-size:12px; color:#a39e94">このPCには日本語の読み上げ音声がないため、読み上げできません</div>
   </section>
   <div id="monStart" class="hidden">
     <div style="font-size:28px; font-weight:800">モニター画面</div>
@@ -275,6 +276,7 @@
         </div>
         <textarea id="qText" placeholder="問題文（画像・音の問題では「この曲のタイトルは？」など）" style="min-height:70px; margin-top:8px; font-family:inherit; font-size:15px"></textarea>
         <input type="text" id="qAnswer" placeholder="答え" style="margin-top:8px">
+        <input type="text" id="qYomi" placeholder="読み方（任意）：読み上げで間違えそうなときだけ、ひらがなで" style="margin-top:8px">
         <div id="qFileWrap" class="hidden" style="margin-top:8px">
           <input type="file" id="qFile">
           <div class="muted" id="qFileInfo"></div>
@@ -283,7 +285,7 @@
         <button class="btn primary" id="qAdd" style="width:100%; margin-top:8px">追加する</button>
         <details style="margin-top:12px">
           <summary class="muted">まとめて貼り付ける（文字の問題）</summary>
-          <p class="muted">1行に1問。問題と答えは「｜」かタブで区切ります。例：<br>日本一高い山は？｜富士山</p>
+          <p class="muted">1行に1問。問題と答えは「｜」かタブで区切ります。例：<br>日本一高い山は？｜富士山<br>読み方を指定したいときは3つ目に：<br>香川県の県庁所在地は？｜高松市｜かがわけんのけんちょうしょざいちは？</p>
           <textarea id="qBulk" style="font-family:inherit; font-size:14px; min-height:110px"></textarea>
           <button class="btn" id="qBulkAdd" style="width:100%; margin-top:8px">まとめて追加</button>
         </details>
@@ -295,6 +297,9 @@
         </div>
         <label class="muted" style="display:flex; gap:8px; align-items:center; margin-top:10px">
           <input type="checkbox" id="qAuto"> 正解が出たら自動で答えをモニターに出す
+        </label>
+        <label class="muted" style="display:flex; gap:8px; align-items:center; margin-top:6px">
+          <input type="checkbox" id="qTts"> 🔊 問題文をモニターで読み上げる（押されたら止まる）
         </label>
       </details>
     </div>
@@ -627,7 +632,7 @@ async function startHost(){
   };
   H.order = H.order||[]; H.locked = H.locked||[]; H.judged = H.judged||{};
   if(H.qi==null) H.qi = -1; if(H.speed==null) H.speed = 8; if(H.autoAns==null) H.autoAns = true;
-  if(H.rv===undefined) H.rv = null; if(H.showAns==null) H.showAns = false;
+  if(H.rv===undefined) H.rv = null; if(H.showAns==null) H.showAns = false; if(H.tts==null) H.tts = true;
   syncClock();
   onValue(ref(db,'rooms/'+room+'/qs'), s => { Q = arr(s.val()); renderQList(); renderCur(); });
   onValue(ref(db,'rooms/'+room+'/monitors'), s => { monitorsOn = Object.keys(s.val()||{}).length; renderMonState(); });
@@ -852,6 +857,7 @@ document.querySelectorAll('#qType button').forEach(b => b.onclick = () => {
 });
 document.querySelectorAll('#qSpeed button').forEach(b => b.onclick = () => { H.speed = Number(b.dataset.s); renderQList(); save(); });
 $('qAuto').onchange = () => { H.autoAns = $('qAuto').checked; save(); };
+$('qTts').onchange = () => { H.tts = $('qTts').checked; save(); };
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 function saveQ(){ set(ref(db,'rooms/'+room+'/qs'), Q).catch(()=>{ $('qErr').textContent='保存できませんでした。通信を確認してください'; }); }
 function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
@@ -865,7 +871,7 @@ async function shrinkImage(file){
 }
 $('qAdd').onclick = async () => {
   $('qErr').textContent='';
-  const text=$('qText').value.trim(), answer=$('qAnswer').value.trim(), f=$('qFile').files[0];
+  const text=$('qText').value.trim(), answer=$('qAnswer').value.trim(), yomi=$('qYomi').value.trim(), f=$('qFile').files[0];
   if(qType==='text' && !text){ $('qErr').textContent='問題文を入れてください'; return; }
   if(qType!=='text' && !f){ $('qErr').textContent = qType==='image' ? '画像を選んでください' : '音のファイルを選んでください'; return; }
   const btn=$('qAdd'); btn.disabled=true; btn.textContent='追加中…';
@@ -876,8 +882,8 @@ $('qAdd').onclick = async () => {
       if(media.length > 8*1024*1024){ throw new Error('big'); }
       await set(ref(db,'rooms/'+room+'/media/'+id), media);
     }
-    Q.push({ id, type:qType, text, answer, hasMedia: !!media }); saveQ();
-    $('qText').value=''; $('qAnswer').value=''; $('qFile').value=''; $('qFileInfo').textContent='';
+    Q.push({ id, type:qType, text, answer, yomi, hasMedia: !!media }); saveQ();
+    $('qText').value=''; $('qAnswer').value=''; $('qYomi').value=''; $('qFile').value=''; $('qFileInfo').textContent='';
   }catch(e){
     $('qErr').textContent = e && e.message==='big' ? 'ファイルが大きすぎます（音は5MBくらいまで）。短く切ったものを使ってください' : '追加できませんでした。もう一度試してください';
   }
@@ -906,14 +912,14 @@ $('qSample').onclick = () => {
 $('qBulkAdd').onclick = () => {
   const lines = $('qBulk').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   let n=0;
-  for(const l of lines){ const [t,...rest] = l.split(/\t|｜|\|/); if(!t.trim()) continue; Q.push({ id:newId(), type:'text', text:t.trim(), answer:rest.join('／').trim(), hasMedia:false }); n++; }
+  for(const l of lines){ const [t,a,y] = l.split(/\t|｜|\|/); if(!t || !t.trim()) continue; Q.push({ id:newId(), type:'text', text:t.trim(), answer:(a||'').trim(), yomi:(y||'').trim(), hasMedia:false }); n++; }
   if(n){ saveQ(); $('qBulk').value=''; $('qBulkAdd').textContent=n+'問追加しました'; setTimeout(()=>$('qBulkAdd').textContent='まとめて追加',2000); }
 };
 function renderQList(){
   if(!H) return;
   $('qCount').textContent = Q.length ? '（'+Q.length+'問）' : '（まだありません）';
   document.querySelectorAll('#qSpeed button').forEach(b=>b.classList.toggle('on', Number(b.dataset.s)===H.speed));
-  $('qAuto').checked = !!H.autoAns;
+  $('qAuto').checked = !!H.autoAns; $('qTts').checked = H.tts!==false;
   const box=$('qList'); box.innerHTML='';
   if(!Q.length){ box.innerHTML='<div class="muted">下のフォームから問題を追加してください</div>'; return; }
   Q.forEach((q,i)=>{
@@ -936,11 +942,46 @@ function renderQList(){
 // モニター（会場に映す）
 // =========================================================
 let M = null, MQ = [], mPrev = null, mMedia = {}, mAudioEl = null, mNgUntil = 0;
+// ----- 読み上げ（ブラウザ内蔵の音声） -----
+const TTS = window.speechSynthesis || null;
+let ttsKey = null, ttsVoice = null, ttsReady = false;
+function pickVoice(){
+  if(!TTS) return null;
+  const vs = TTS.getVoices().filter(v => /^ja/i.test(v.lang));
+  const pref = ['Google','Nanami','Keita','Kyoko','Otoya','O-ren','Haruka','Ayumi','Ichiro'];
+  for(const n of pref){ const v = vs.find(v=>v.name.includes(n)); if(v) return v; }
+  return vs[0] || null;
+}
+if(TTS){ ttsVoice = pickVoice(); try{ TTS.addEventListener('voiceschanged', ()=>{ ttsVoice = pickVoice(); }); }catch(e){ TTS.onvoiceschanged = ()=>{ ttsVoice = pickVoice(); }; } }
+function speak(text, speed){
+  if(!TTS || !text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP'; if(ttsVoice) u.voice = ttsVoice;
+  u.rate = Math.max(.7, Math.min(1.7, (speed||8) / 7.5)); u.volume = 1;
+  TTS.speak(u);
+}
+function ttsTick(q){
+  if(!TTS) return;
+  const rv = M.rv;
+  const want = ttsReady && M.tts!==false && q && q.type!=='audio' && rv && !rv.full && rv.paused==null
+    && serverNow() >= rv.start && !M.showAns && M.phase==='open';
+  const key = want ? q.id+':'+M.round+':'+(rv.resumed||0) : null;
+  if(key===ttsKey) return;
+  TTS.cancel(); ttsKey = key;
+  if(!key) return;
+  const src = q.yomi || q.text || '';
+  const chars = [...(q.text||'')], n = revealCount(rv, q.text, M.speed);
+  const sc = [...src], from = chars.length ? Math.floor(sc.length * n / chars.length) : 0;
+  const rest = sc.slice(from).join('');
+  if(rest.trim()) speak(rest, M.speed);
+}
 async function startMonitor(){
   document.body.classList.add('mon'); show('monitor');
   $('monStart').classList.remove('hidden');
   $('monGo').onclick = () => {
     audio(); mAudioEl = new Audio(); mAudioEl.preload='auto';
+    if(TTS){ try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; TTS.speak(u); }catch(e){} ttsReady = true; ttsVoice = pickVoice(); }
+    setTimeout(()=>{ $('mTtsWarn').classList.toggle('hidden', !!(TTS && pickVoice())); }, 1500);
     $('monStart').classList.add('hidden');
     try{ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{}); }catch(e){}
   };
@@ -1015,6 +1056,7 @@ function monTick(){
   if(!M) return;
   monStatus();
   const q = monQ();
+  ttsTick(q);
   // 問題文（1文字ずつ）
   const box=$('mText');
   if(!q){ if(box.dataset.k!=='none'){ box.textContent=''; box.dataset.k='none'; } }
