@@ -309,6 +309,22 @@
     </div>
 
     <div class="card">
+      <details id="tDetails">
+        <summary>🧪 テストモード（一人で試す）</summary>
+        <p class="muted">スマホがなくても、ここから各チームの早押しボタンを押せます。モニター画面も同じ端末の別タブで開けます。</p>
+        <div class="teams" id="tBtns"></div>
+        <label class="muted" style="display:flex; gap:8px; align-items:center">
+          <input type="checkbox" id="tAuto"> 問題を出したら、仮のチームが自動で（ランダムに）押す
+        </label>
+        <div class="row" style="margin-top:10px">
+          <a class="btn" id="tMon" target="_blank" style="text-align:center; text-decoration:none">モニターを別タブで開く</a>
+          <a class="btn" id="tPlayer" target="_blank" style="text-align:center; text-decoration:none">回答者画面を別タブで開く</a>
+        </div>
+        <p class="muted" style="margin-top:8px">回答者画面は何枚でも開けます。タブごとに別の人として参加できます。</p>
+      </details>
+    </div>
+
+    <div class="card">
       <details>
         <summary>参加用QRコード・リンク</summary>
         <div class="code" id="hCodeBig"></div>
@@ -374,7 +390,7 @@ const b64e = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').repla
 const b64d = s => decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/'))));
 function readHash(){
   const h = new URLSearchParams(location.hash.slice(1));
-  return { c: (h.get('c')||'').toUpperCase(), k: h.get('k'), m: h.get('m')==='1' };
+  return { c: (h.get('c')||'').toUpperCase(), k: h.get('k'), m: h.get('m')==='1', p: h.get('p')==='1' };
 }
 let CONFIG = FIXED_CONFIG;
 {
@@ -443,7 +459,11 @@ onValue(ref(db, '.info/connected'), s => {
   $('jConn').textContent = connected ? '接続しました' : '接続中…';
 });
 
-const myId = LS.get('pid', null) || (()=>{ const id = Math.random().toString(36).slice(2,10); LS.set('pid', id); return id; })();
+const newPid = () => Math.random().toString(36).slice(2,10);
+// テスト用（#p=1）のタブは、タブごとに別人として扱う
+const myId = readHash().p
+  ? ((()=>{ try{ let v=sessionStorage.getItem('hy.tpid'); if(!v){ v='t'+newPid(); sessionStorage.setItem('hy.tpid', v); } return v; }catch(e){ return 't'+newPid(); } })())
+  : (LS.get('pid', null) || (()=>{ const id = newPid(); LS.set('pid', id); return id; })());
 const joinLink = code => {
   const base = location.href.split('#')[0];
   return base + '#c=' + code + (FIXED_CONFIG ? '' : '&k=' + b64e(JSON.stringify({
@@ -495,7 +515,10 @@ $('joinCode').onclick = () => {
 // 回答者
 // =========================================================
 let S = null;            // 部屋の状態（司会が書く）
-let me = LS.get('me', { team:null, name:'' });
+const TEST_TAB = readHash().p;
+const loadMe = () => { if(TEST_TAB){ try{ return JSON.parse(sessionStorage.getItem('hy.tme')) || {team:null,name:''}; }catch(e){ return {team:null,name:''}; } } return LS.get('me', { team:null, name:'' }); };
+const saveMe = m => { if(TEST_TAB){ try{ sessionStorage.setItem('hy.tme', JSON.stringify(m)); }catch(e){} } else LS.set('me', m); };
+let me = loadMe();
 let myPressRound = null;
 
 function teamsShown(){
@@ -526,7 +549,7 @@ function writeMe(){
   onDisconnect(r).remove();
 }
 $('joinBtn').onclick = () => {
-  me.name = $('nameInput').value.trim().slice(0,12); LS.set('me', me); audio();
+  me.name = $('nameInput').value.trim().slice(0,12); saveMe(me); audio();
   writeMe(); show('player'); renderPlayer();
 };
 $('pChange').onclick = () => { remove(ref(db,'rooms/'+room+'/players/'+myId)).catch(()=>{}); show('join'); renderPicks(); };
@@ -608,6 +631,7 @@ async function startHost(){
   onValue(ref(db,'rooms/'+room+'/qs'), s => { Q = arr(s.val()); renderQList(); renderCur(); });
   onValue(ref(db,'rooms/'+room+'/monitors'), s => { monitorsOn = Object.keys(s.val()||{}).length; renderMonState(); });
   const ml = monLink(room); $('hMonLink').textContent = ml;
+  $('tMon').href = ml; $('tPlayer').href = location.href.split('#')[0] + '#c=' + room + '&p=1';
   $('hMonCopy').onclick = async () => { try{ await navigator.clipboard.writeText(ml); $('hMonCopy').textContent='コピーしました'; }catch(e){ $('hMonCopy').textContent='コピーできませんでした'; } setTimeout(()=>$('hMonCopy').textContent='モニター用リンクをコピー',2000); };
   setInterval(renderCur, 150);
   listenBuzz();
@@ -666,6 +690,38 @@ function onBuzzChange(){
   }
   renderHost(); save();
 }
+// ----- テストモード -----
+let tTimers = [];
+function testBuzz(team){
+  if(!H || H.phase!=='open') return;
+  if(H.locked.includes(team)) return;
+  const pid = 'test'+team;
+  if(buzzes[pid]) return;
+  const now = serverNow();
+  set(ref(db,'rooms/'+room+'/buzz/'+H.round+'/'+pid), { t: now, srv: serverTimestamp(), team, name: 'テスト'+(team+1), synced: true }).catch(()=>{});
+}
+function renderTest(){
+  const box=$('tBtns'); if(!box || !H) return; box.innerHTML='';
+  H.teams.slice(0,H.nTeams).forEach((t,i)=>{
+    const b=document.createElement('button'); b.className='teamPick'; b.style.background=COLORS[i];
+    b.textContent=t.name+' が押す'; b.disabled = H.phase!=='open' || H.locked.includes(i) || !!buzzes['test'+i];
+    b.addEventListener('pointerdown', e=>{ e.preventDefault(); testBuzz(i); });
+    box.appendChild(b);
+  });
+}
+function scheduleTestBuzz(){
+  tTimers.forEach(clearTimeout); tTimers=[];
+  if(!$('tAuto').checked) return;
+  const L = H.qi>=0 && Q[H.qi] ? [...(Q[H.qi].text||'')].length : 10;
+  const readMs = Math.max(1500, Math.min(7000, L*1000/(H.speed||8)));
+  for(let i=0;i<H.nTeams;i++){
+    const delay = 700 + readMs*(.25 + Math.random()*.6) + Math.random()*400;
+    tTimers.push(setTimeout(()=>testBuzz(i), delay));
+  }
+}
+$('tAuto').checked = LS.get('testAuto', false);
+$('tAuto').onchange = () => LS.set('testAuto', $('tAuto').checked);
+
 function startQuestion(idx){
   if(settleTimer){ clearTimeout(settleTimer); settleTimer=null; }
   const old = H.round;
@@ -674,7 +730,7 @@ function startQuestion(idx){
   H.rv = H.qi>=0 ? { start: serverNow() + 700, paused: null, full: false, resumed: null } : null;
   H.showAns = false;
   remove(ref(db,'rooms/'+room+'/buzz/'+old)).catch(()=>{});
-  listenBuzz(); hs('open'); renderHost(); renderQList(); save();
+  listenBuzz(); hs('open'); renderHost(); renderQList(); save(); scheduleTestBuzz();
 }
 const newQuestion = () => startQuestion(Q.length && H.qi+1 < Q.length ? H.qi+1 : -1);
 const num = (id,d) => { const n=parseInt($(id).value,10); return isNaN(n)?d:n; };
@@ -707,6 +763,7 @@ $('hResetScore').onclick = () => {
 };
 
 function renderHost(){
+  renderTest();
   $('hRound').textContent = H.round;
   const st=$('hState'); const a = H.order.find(o=>o.pid===H.answerer);
   if(H.phase==='idle'){ st.textContent='待機中'; st.style.background='#888'; }
@@ -986,7 +1043,7 @@ function renderPlayers(ps){
 room = readHash().c;
 if(room){
   isHost = LS.get('host.'+room, false);
-  if(readHash().m) startMonitor(); else if(isHost) startHost(); else startJoin();
+  if(readHash().m) startMonitor(); else if(TEST_TAB) startJoin(); else if(isHost) startHost(); else startJoin();
 } else {
   const last = LS.get('lastHostRoom', null);
   if(last){ const a=document.createElement('a'); a.href='#'; a.textContent='前回の部屋（'+last+'）を開く'; a.style.color='var(--ink)';
